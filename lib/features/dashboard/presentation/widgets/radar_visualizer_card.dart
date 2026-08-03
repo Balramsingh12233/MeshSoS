@@ -96,9 +96,9 @@ class _RadarPainter extends CustomPainter {
 
     // 1. Draw 4 Concentric Radar Circles
     final circlePaint = Paint()
-      color = AppColors.transportMesh.withOpacity(0.25)
-      style = PaintingStyle.stroke
-      strokeWidth = 1.2;
+      ..color = AppColors.transportMesh.withOpacity(0.25)
+      ..style = PaintingStyle.stroke
+      ..strokeWidth = 1.2;
 
     for (int i = 1; i <= 4; i++) {
       final r = maxRadius * (i / 4);
@@ -107,7 +107,7 @@ class _RadarPainter extends CustomPainter {
 
     // 2. Draw Rotating Radar Sweep Gradient Beam
     final sweepPaint = Paint()
-      shader = SweepGradient(
+      ..shader = SweepGradient(
         center: Alignment.center,
         startAngle: 0.0,
         endAngle: math.pi * 0.5, // 90 degree sweep arc
@@ -122,12 +122,12 @@ class _RadarPainter extends CustomPainter {
 
     // 3. Draw Discovered Mesh Peer Node Dots (Glowing Circles)
     final nodePaint = Paint()
-      color = AppColors.transportMesh
-      style = PaintingStyle.fill;
+      ..color = AppColors.transportMesh
+      ..style = PaintingStyle.fill;
 
     final nodeGlowPaint = Paint()
-      color = AppColors.transportMesh.withOpacity(0.4)
-      maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
+      ..color = AppColors.transportMesh.withOpacity(0.4)
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 6);
 
     // Fixed mock radial positions for nearby discovered peers
     final nodePositions = [
