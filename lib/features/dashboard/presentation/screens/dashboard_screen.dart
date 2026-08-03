@@ -5,6 +5,7 @@ import '../../../chat/presentation/screens/chat_screen.dart';
 import '../../../chat/presentation/screens/chats_list_screen.dart';
 import '../../../mesh/domain/models/message_envelope.dart';
 import '../../../mesh/domain/providers/mesh_router_provider.dart';
+import '../widgets/mesh_status_banner.dart';
 import '../widgets/nearby_peer_item.dart';
 import '../widgets/radar_visualizer_card.dart';
 import '../widgets/recent_chat_item.dart';
@@ -105,6 +106,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // Trigger mesh bootstrap (permissions + advertising/discovery) once.
+    // meshBootstrapProvider is a FutureProvider that starts mesh on first read.
+    ref.watch(meshBootstrapProvider);
+
     // If user selected 'Chats' tab (index 2), render ChatsListScreen!
     if (_selectedBottomNavIndex == 2) {
       return Scaffold(
@@ -188,9 +193,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── FIXED SECTION: Radar + SOS Panic card (does NOT scroll) ────────
+          // ── FIXED SECTION: Radar + Status Banner + SOS Panic card ──────────
           // Real peer count controls glowing dots on radar (0 when no peers found)
           RadarVisualizerCard(activePeerCount: nearbyPeers.length),
+          // Shows actionable error card when permissions/GPS/mesh fails
+          const MeshStatusBanner(),
           SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
           const SizedBox(height: 12),
