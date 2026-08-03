@@ -1,13 +1,7 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 
-/// SosPanicCard is a high-priority emergency panic broadcast card widget.
-/// 
-/// Google Product Design Highlights:
-/// 1. Reserved Warm Red Palette: Uses warm red (`#FF4D4D`) container with high contrast text.
-/// 2. Shield Warning Icon: Instantly communicates emergency priority.
-/// 3. One-Tap Action: Prominent rounded action button to trigger instant panic SOS broadcasts 
-///    with attached GPS location across all reachable mesh radio nodes.
+/// SosPanicCard renders the warm red emergency panic broadcast card matching Target Mockup.
 class SosPanicCard extends StatelessWidget {
   final VoidCallback onTriggerSos;
 
@@ -23,12 +17,21 @@ class SosPanicCard extends StatelessWidget {
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       padding: const EdgeInsets.all(18),
       decoration: BoxDecoration(
-        color: AppColors.sosAccent, // Emergency warm red container (#FF4D4D)
+        // Coral-red gradient background matching Target Mockup screenshot 100%
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFFF5252),
+            Color(0xFFEF5350),
+            Color(0xFFE53935),
+          ],
+        ),
         borderRadius: BorderRadius.circular(20),
         boxShadow: [
           BoxShadow(
-            color: AppColors.sosAccent.withOpacity(0.35),
-            blurRadius: 14,
+            color: const Color(0xFFFF5252).withOpacity(0.4),
+            blurRadius: 16,
             spreadRadius: 2,
             offset: const Offset(0, 4),
           ),
@@ -39,11 +42,11 @@ class SosPanicCard extends StatelessWidget {
         children: [
           Row(
             children: [
-              // Shield Warning Icon Container
+              // Circular dark icon container with shield warning icon
               Container(
                 padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
-                  color: Colors.black.withOpacity(0.2),
+                  color: Colors.black.withOpacity(0.25),
                   shape: BoxShape.circle,
                 ),
                 child: const Icon(
@@ -71,8 +74,9 @@ class SosPanicCard extends StatelessWidget {
                     Text(
                       'Discovered nearby device nodes',
                       style: TextStyle(
-                        color: Colors.white.withOpacity(0.85),
+                        color: Colors.white.withOpacity(0.9),
                         fontSize: 13,
+                        fontWeight: FontWeight.w400,
                       ),
                     ),
                   ],
@@ -94,7 +98,7 @@ class SosPanicCard extends StatelessWidget {
                 shape: RoundedRectangleBorder(
                   borderRadius: BorderRadius.circular(22), // Pill shape
                   side: BorderSide(
-                    color: Colors.white.withOpacity(0.3),
+                    color: Colors.white.withOpacity(0.35),
                     width: 1,
                   ),
                 ),
