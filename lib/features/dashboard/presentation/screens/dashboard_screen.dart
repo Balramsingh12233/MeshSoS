@@ -1,0 +1,220 @@
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import '../../../../core/constants/app_colors.dart';
+import '../../../chat/presentation/screens/chat_screen.dart';
+import '../../../mesh/domain/models/message_envelope.dart';
+import '../../../mesh/domain/providers/mesh_router_provider.dart';
+import '../widgets/radar_visualizer_card.dart';
+import '../widgets/recent_chat_item.dart';
+import '../widgets/sos_panic_card.dart';
+
+/// DashboardScreen is the primary Home Screen of MeshSOS.
+/// 
+/// Google Product Design Highlights:
+/// 1. Top Brand Header: "MeshSOS" logo title + glowing green 'Mesh Online' pill badge.
+/// 2. Interactive Animated Radar Visualizer Card: Concentric radar rings & rotating beam.
+/// 3. Warm Red Emergency Panic SOS Card (#FF4D4D): One-tap emergency broadcast.
+/// 4. Recent Mesh Conversations List: Displays active threads with transport mode badges.
+/// 5. Material 3 Bottom Navigation Bar: (Dashboard 🏠, Radar 📡, Chats 💬, Settings ⚙️).
+class DashboardScreen extends ConsumerStatefulWidget {
+  const DashboardScreen({super.key});
+
+  @override
+  ConsumerState<DashboardScreen> createState() => _DashboardScreenState();
+}
+
+class _DashboardScreenState extends ConsumerState<DashboardScreen> {
+  int _selectedBottomNavIndex = 0;
+
+  void _navigateToChatScreen() {
+    Navigator.of(context).push(
+      MaterialPageRoute(builder: (_) => const ChatScreen()),
+    );
+  }
+
+  void _handleSosBroadcast() {
+    final myId = ref.read(currentDeviceIdProvider);
+    final router = ref.read(meshRouterProvider);
+
+    final sosEnvelope = MessageEnvelope(
+      senderId: myId,
+      payload: 'EMERGENCY SOS: Help needed! GPS location attached.',
+      type: MessageType.sos,
+      deliveryStatus: DeliveryStatus.sentMesh,
+      ttl: 8,
+    );
+
+    router.sendNewMessage(sosEnvelope);
+
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        backgroundColor: AppColors.sosAccent,
+        content: Text(
+          '🚨 EMERGENCY SOS BROADCASTED TO ALL REACHABLE PEERS',
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppColors.background,
+      appBar: AppBar(
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        title: Row(
+          children: [
+            // App Logo Icon
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: const BoxDecoration(
+                color: AppColors.surface,
+                shape: BoxShape.circle,
+              ),
+              child: const Icon(
+                Icons.hub_rounded,
+                color: AppColors.sosAccent,
+                size: 20,
+              ),
+            ),
+            const SizedBox(width: 8),
+            
+            // App Name with warm red SOS text
+            RichText(
+              text: const TextSpan(
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                children: [
+                  TextSpan(text: 'Mesh', style: TextStyle(color: Colors.white)),
+                  TextSpan(text: 'SOS', style: TextStyle(color: AppColors.sosAccent)),
+                ],
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          // Glowing 'Mesh Online' status badge matching mockup
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.transportMesh.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.transportMesh, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.transportMesh.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: const Row(
+              children: [
+                CircleAvatar(
+                  radius: 4,
+                  backgroundColor: AppColors.transportMesh,
+                ),
+                SizedBox(width: 6),
+                Text(
+                  'Mesh Online',
+                  style: TextStyle(
+                    color: AppColors.transportMesh,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+      body: SingleChildScrollView(
+        physics: const BouncingScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 1. Top Section: Interactive Animated Radar Visualizer Card
+            const RadarVisualizerCard(activePeerCount: 3),
+
+            // 2. Middle Section: Warm Red Emergency Panic SOS Card (#FF4D4D)
+            SosPanicCard(onTriggerSos: _handleSosBroadcast),
+
+            const SizedBox(height: 12),
+
+            // Recent Conversations Header
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+              child: Text(
+                'Recent Conversations',
+                style: TextStyle(
+                  color: AppColors.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+
+            // 3. Recent Chat Threads Matching Mockup Screenshot
+            RecentChatItem(
+              peerName: 'John',
+              lastMessageText: "Hello, that's your message?",
+              mode: DeliveryStatus.sentMesh,
+              onTap: _navigateToChatScreen,
+            ),
+            RecentChatItem(
+              peerName: 'Mesh Hinsez',
+              lastMessageText: 'Hello, mreth.',
+              mode: DeliveryStatus.sentCloud,
+              onTap: _navigateToChatScreen,
+            ),
+            RecentChatItem(
+              peerName: 'Dirok Huvinro',
+              lastMessageText: 'Messages that automatically use SMS as backup.',
+              mode: DeliveryStatus.sentSms,
+              onTap: _navigateToChatScreen,
+            ),
+
+            const SizedBox(height: 20),
+          ],
+        ),
+      ),
+
+      // 4. Material 3 Bottom Navigation Bar
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _selectedBottomNavIndex,
+        onTap: (index) {
+          setState(() {
+            _selectedBottomNavIndex = index;
+          });
+          if (index == 2) {
+            _navigateToChatScreen();
+          }
+        },
+        backgroundColor: AppColors.surface,
+        selectedItemColor: AppColors.textPrimary,
+        unselectedItemColor: AppColors.textSecondary,
+        type: BottomNavigationBarType.fixed,
+        items: const [
+          BottomNavigationBarItem(
+            icon: Icon(Icons.grid_view_rounded),
+            label: 'Dashboard',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.radar_rounded),
+            label: 'Radar',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.chat_bubble_outline_rounded),
+            label: 'Chats',
+          ),
+          BottomNavigationBarItem(
+            icon: Icon(Icons.settings_outlined),
+            label: 'Settings',
+          ),
+        ],
+      ),
+    );
+  }
+}
