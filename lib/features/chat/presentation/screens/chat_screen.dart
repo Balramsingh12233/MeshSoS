@@ -8,17 +8,14 @@ import '../widgets/chat_input_field.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/network_status_strip.dart';
 
-/// ChatScreen is the main Google Product Design chat interface for MeshSOS.
-/// 
-/// System Design & UI Features:
-/// 1. Real-Time Message Stream: Listens to `MeshRouter.incomingMessageStream` 
-///    and updates the UI instantly as packets hop through the mesh.
-/// 2. Google Product Design Aesthetics: OLED dark theme, top network status strip, 
-///    glassmorphic delivery path badges (Mesh, Cloud, SMS).
-/// 3. Floating SOS Emergency FAB: High-visibility warm red button (`#FF4D4D`) 
-///    to trigger instant one-tap panic broadcasts.
+/// ChatScreen is the WhatsApp / Google Messages styled chat conversation screen.
 class ChatScreen extends ConsumerStatefulWidget {
-  const ChatScreen({super.key});
+  final String peerName;
+
+  const ChatScreen({
+    super.key,
+    this.peerName = 'John',
+  });
 
   @override
   ConsumerState<ChatScreen> createState() => _ChatScreenState();
@@ -38,13 +35,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     });
   }
 
-  /// Loads offline chat history from Hive DB on startup
   void _loadHistory() {
     try {
       final repository = ref.read(localStorageRepositoryProvider);
       final history = repository.getAllMessages();
-      
-      // If database is empty, seed demo messages matching the UI design mockup
       if (history.isEmpty) {
         _seedDemoMockupMessages();
       } else {
@@ -54,17 +48,15 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         });
       }
     } catch (_) {
-      // Fallback to demo mockup messages if database box is not yet initialized
       _seedDemoMockupMessages();
     }
   }
 
-  /// Seeds initial mockup messages matching the Google Product Design screenshot
   void _seedDemoMockupMessages() {
     final myId = ref.read(currentDeviceIdProvider);
     final demoMessages = [
       MessageEnvelope(
-        senderId: 'peer_alex',
+        senderId: 'peer_john',
         recipientId: myId,
         payload: 'Hi, this is so cool for an advanced offline emergency chat app.',
         deliveryStatus: DeliveryStatus.sentMesh,
@@ -79,7 +71,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         timestamp: DateTime.now().subtract(const Duration(minutes: 8)).millisecondsSinceEpoch,
       ),
       MessageEnvelope(
-        senderId: 'peer_alex',
+        senderId: 'peer_john',
         recipientId: myId,
         payload: 'Are you confirmed with purely mesh network route?',
         deliveryStatus: DeliveryStatus.sentCloud,
@@ -102,11 +94,11 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     ];
 
     setState(() {
+      _messages.clear();
       _messages.addAll(demoMessages);
     });
   }
 
-  /// Subscribes to MeshRouter live incoming message stream
   void _subscribeToRouterStream() {
     final router = ref.read(meshRouterProvider);
     _subscription = router.incomingMessageStream.listen((envelope) {
@@ -134,7 +126,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
-  /// Sends a new text chat message over the mesh router
   void _handleSendMessage(String text) {
     final myId = ref.read(currentDeviceIdProvider);
     final router = ref.read(meshRouterProvider);
@@ -150,7 +141,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     _scrollToBottom();
   }
 
-  /// Triggers emergency SOS broadcast
   void _handleSosBroadcast() {
     final myId = ref.read(currentDeviceIdProvider);
     final router = ref.read(meshRouterProvider);
@@ -182,49 +172,113 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final myId = ref.watch(currentDeviceIdProvider);
 
     return Scaffold(
+      backgroundColor: AppColors.background,
       appBar: AppBar(
-        title: const Text('MeshSOS'),
+        backgroundColor: AppColors.background,
+        elevation: 0,
+        leading: IconButton(
+          icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
+          onPressed: () => Navigator.of(context).pop(),
+        ),
+        title: Row(
+          children: [
+            // WhatsApp-style User Profile Avatar + Online Green Indicator
+            Stack(
+              children: [
+                CircleAvatar(
+                  radius: 18,
+                  backgroundColor: AppColors.surfaceVariant,
+                  child: const Icon(Icons.person_rounded, color: Colors.white, size: 20),
+                ),
+                Positioned(
+                  right: 0,
+                  bottom: 0,
+                  child: Container(
+                    width: 9,
+                    height: 9,
+                    decoration: BoxDecoration(
+                      color: AppColors.transportMesh,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.background, width: 1.5),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(width: 10),
+            
+            // Name + Mesh Reachable Subtitle
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  widget.peerName,
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+                const Text(
+                  'Mesh Radio Reachable (3 Hops)',
+                  style: TextStyle(
+                    color: AppColors.transportMesh,
+                    fontSize: 11,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
         actions: [
           IconButton(
-            icon: const Icon(Icons.tune_rounded, color: AppColors.textPrimary),
+            icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             onPressed: () {},
           ),
         ],
       ),
-      body: Column(
+      body: Stack(
         children: [
-          // Persistent Top Connectivity Status Strip
-          const NetworkStatusStrip(
-            currentMode: DeliveryStatus.sentMesh,
-            activePeerCount: 3,
+          Column(
+            children: [
+              // Top Persistent Connectivity Status Strip
+              const NetworkStatusStrip(
+                currentMode: DeliveryStatus.sentMesh,
+                activePeerCount: 3,
+              ),
+
+              // Chat Thread Message History
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.only(top: 12, bottom: 80),
+                  itemCount: _messages.length,
+                  itemBuilder: (context, index) {
+                    final envelope = _messages[index];
+                    final isMe = envelope.senderId == myId;
+                    return MessageBubble(envelope: envelope, isMe: isMe);
+                  },
+                ),
+              ),
+
+              // Bottom Input Composer Bar
+              ChatInputField(onSendMessage: _handleSendMessage),
+            ],
           ),
 
-          // Main Chat Message History List
-          Expanded(
-            child: ListView.builder(
-              controller: _scrollController,
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              itemCount: _messages.length,
-              itemBuilder: (context, index) {
-                final envelope = _messages[index];
-                final isMe = envelope.senderId == myId;
-                return MessageBubble(envelope: envelope, isMe: isMe);
-              },
+          // Floating Warm Red SOS FAB at Bottom Right matching mockup
+          Positioned(
+            right: 16,
+            bottom: 72,
+            child: FloatingActionButton(
+              elevation: 8,
+              backgroundColor: AppColors.sosAccent,
+              foregroundColor: Colors.white,
+              onPressed: _handleSosBroadcast,
+              child: const Icon(Icons.shield_outlined, size: 26),
             ),
           ),
-
-          // Bottom Text Input Composer
-          ChatInputField(onSendMessage: _handleSendMessage),
         ],
-      ),
-
-      // Floating Emergency SOS Panic Action Button (Warm Red #FF4D4D)
-      floatingActionButton: FloatingActionButton(
-        elevation: 6,
-        backgroundColor: AppColors.sosAccent,
-        foregroundColor: Colors.white,
-        onPressed: _handleSosBroadcast,
-        child: const Icon(Icons.shield_outlined, size: 26),
       ),
     );
   }
