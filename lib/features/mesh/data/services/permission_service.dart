@@ -6,16 +6,18 @@ import 'package:permission_handler/permission_handler.dart';
 ///
 /// Per official nearby_connections docs:
 /// - ACCESS_FINE_LOCATION, BLUETOOTH_ADVERTISE, BLUETOOTH_CONNECT,
-///   BLUETOOTH_SCAN are "dangerous" permissions requiring runtime grant.
-/// - GPS service must also be enabled or Nearby will disconnect devices.
+///   BLUETOOTH_SCAN, NEARBY_WIFI_DEVICES are "dangerous" permissions requiring runtime grant.
+/// - Location Service (GPS) MUST be enabled or Nearby will fail to discover or disconnect immediately.
 class PermissionService {
   /// Request all permissions needed for Nearby Connections to work.
-  /// Returns true if every required permission is granted.
+  /// Returns true if essential permissions are granted.
   Future<bool> requestAllPermissions() async {
-    if (!Platform.isAndroid) return true; // iOS not supported by nearby_connections
+    if (!Platform.isAndroid) return true;
 
+    // 1. Request Runtime Permissions using permission_handler
     final statuses = await [
       Permission.location,
+      Permission.locationWhenInUse,
       Permission.bluetooth,
       Permission.bluetoothAdvertise,
       Permission.bluetoothConnect,
@@ -23,32 +25,26 @@ class PermissionService {
       Permission.nearbyWifiDevices,
     ].request();
 
-    final allGranted = statuses.values.every(
-      (s) => s == PermissionStatus.granted || s == PermissionStatus.limited,
-    );
+    // Check location permission is granted
+    final locationGranted = (statuses[Permission.location]?.isGranted ?? false) ||
+        (statuses[Permission.locationWhenInUse]?.isGranted ?? false);
 
-    return allGranted;
+    return locationGranted;
   }
 
   /// Check if Location service (GPS) is actually enabled.
-  /// Nearby Connections needs GPS ON or devices disconnect immediately.
   Future<bool> isLocationServiceEnabled() async {
     if (!Platform.isAndroid) return true;
     return await Permission.location.serviceStatus.isEnabled;
   }
 
-  /// Returns true only if ALL permissions are already granted (no dialog).
+  /// Returns true only if essential permissions are already granted.
   Future<bool> arePermissionsGranted() async {
     if (!Platform.isAndroid) return true;
 
-    final checks = await Future.wait([
-      Permission.location.isGranted,
-      Permission.bluetooth.isGranted,
-      Permission.bluetoothAdvertise.isGranted,
-      Permission.bluetoothConnect.isGranted,
-      Permission.bluetoothScan.isGranted,
-    ]);
+    final locationGranted = await Permission.location.isGranted ||
+        await Permission.locationWhenInUse.isGranted;
 
-    return checks.every((granted) => granted);
+    return locationGranted;
   }
 }
