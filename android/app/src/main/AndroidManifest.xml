@@ -1,20 +1,37 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ===== Nearby Connections Permissions (Android 5 through 14+) ===== -->
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- ======================================================================
+         NEARBY CONNECTIONS PERMISSIONS — exact spec from nearby_connections 4.3.0 docs
+         https://pub.dev/packages/nearby_connections
+         ====================================================================== -->
 
-    <!-- Android 12+ (API 31+) permissions -->
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN" />
+    <!-- WiFi — required API ≤ 31 only (API 32+ uses NEARBY_WIFI_DEVICES instead) -->
+    <uses-permission android:maxSdkVersion="31" android:name="android.permission.ACCESS_WIFI_STATE" />
+    <uses-permission android:maxSdkVersion="31" android:name="android.permission.CHANGE_WIFI_STATE" />
 
-    <!-- Android 13+ (API 33+) permission -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES" />
+    <!-- Legacy Bluetooth — required API ≤ 30 only -->
+    <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
+
+    <!-- Location — required for Nearby discovery on all API levels -->
+    <!-- API ≤ 28: Coarse location is sufficient -->
+    <uses-permission android:maxSdkVersion="28" android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- API 29-31: Fine location required -->
+    <uses-permission android:minSdkVersion="29" android:maxSdkVersion="31" android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- API 32+: Fine location still needed for background and Nearby scan -->
+    <uses-permission android:minSdkVersion="32" android:name="android.permission.ACCESS_FINE_LOCATION" />
+
+    <!-- Android 12+ (API 31+) Bluetooth runtime permissions -->
+    <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_ADVERTISE" />
+    <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- neverForLocation: BT scan is used for Nearby, NOT for deriving location -->
+    <uses-permission android:minSdkVersion="31"
+        android:name="android.permission.BLUETOOTH_SCAN"
+        android:usesPermissionFlags="neverForLocation" />
+
+    <!-- Android 13+ (API 33+) Nearby WiFi — replaces CHANGE_WIFI_STATE on API 32+ -->
+    <uses-permission android:minSdkVersion="32" android:name="android.permission.NEARBY_WIFI_DEVICES"
+        android:usesPermissionFlags="neverForLocation" />
 
     <application
         android:label="mesh_sos"
