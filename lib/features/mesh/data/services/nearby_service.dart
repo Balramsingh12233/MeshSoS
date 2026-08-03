@@ -9,19 +9,7 @@ import '../../domain/models/peer_model.dart';
 /// Architecture (per official nearby_connections 4.3.0 docs):
 ///   Strategy: P2P_CLUSTER (many-to-many mesh — best for emergency networks)
 ///   ServiceId: 'com.example.mesh_sos' (unique app identifier)
-///
-/// Flow:
-///   startAdvertising()  ←→  startDiscovery()
-///        ↓                        ↓
-///   onConnectionInitiated    onEndpointFound → requestConnection()
-///        ↓
-///   acceptConnection() → auto-accept all peers (open mesh trust model)
-///        ↓
-///   sendBytesPayload(endpointId, jsonBytes)
-///        ↓
-///   onPayloadReceived → decode JSON → incomingEnvelopeStream
 class NearbyService {
-  // ── Config ────────────────────────────────────────────────────────────────
   static const String _serviceId = 'com.example.mesh_sos';
   final Strategy _strategy = Strategy.P2P_CLUSTER;
 
@@ -30,6 +18,7 @@ class NearbyService {
   NearbyService({required this.deviceId});
 
   // ── State ─────────────────────────────────────────────────────────────────
+  final Map<String, Peer> _discoveredPeers = {};
   final Map<String, Peer> _connectedPeers = {};
   final Map<String, String> _endpointNames = {};
   bool _isRunning = false;
@@ -45,16 +34,22 @@ class NearbyService {
   Stream<List<Peer>> get discoveredPeersStream => _peersController.stream;
 
   List<Peer> get connectedPeers => List.unmodifiable(_connectedPeers.values);
+  List<Peer> get discoveredPeers => List.unmodifiable(_discoveredPeers.values);
 
   bool get isRunning => _isRunning;
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /// Start advertising and discovering simultaneously.
-  /// Per docs: both can run at the same time for mesh behavior.
   Future<void> startMesh() async {
     if (_isRunning) return;
     _isRunning = true;
+
+    // Stop any stale sessions first for a clean state
+    try {
+      await Nearby().stopAdvertising();
+      await Nearby().stopDiscovery();
+    } catch (_) {}
 
     await _startAdvertising();
     await _startDiscovery();
@@ -70,10 +65,11 @@ class NearbyService {
         onDisconnected: _onDisconnected,
         serviceId: _serviceId,
       );
-    } catch (e) {
-      // Platform exceptions (BT off, permission denied) — log and continue
       // ignore: avoid_print
-      print('[NearbyService] startAdvertising error: $e');
+      print('[NearbyService] ✅ Advertising started as "$deviceId"');
+    } catch (e) {
+      // ignore: avoid_print
+      print('[NearbyService] ❌ startAdvertising error: $e');
     }
   }
 
@@ -86,15 +82,18 @@ class NearbyService {
         onEndpointLost: _onEndpointLost,
         serviceId: _serviceId,
       );
+      // ignore: avoid_print
+      print('[NearbyService] ✅ Discovery started as "$deviceId"');
     } catch (e) {
       // ignore: avoid_print
-      print('[NearbyService] startDiscovery error: $e');
+      print('[NearbyService] ❌ startDiscovery error: $e');
     }
   }
 
   /// Stop all Nearby activity and clean up.
   Future<void> stopAll() async {
     _isRunning = false;
+    _discoveredPeers.clear();
     _connectedPeers.clear();
     _endpointNames.clear();
     _peersController.add([]);
@@ -108,11 +107,10 @@ class NearbyService {
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
   /// Called when a remote device initiates OR responds to a connection.
-  /// We auto-accept all peers (open mesh trust model for emergency use).
   void _onConnectionInitiated(String endpointId, ConnectionInfo info) {
     _endpointNames[endpointId] = info.endpointName;
     // ignore: avoid_print
-    print('[NearbyService] Connection initiated: $endpointId (${info.endpointName})');
+    print('[NearbyService] Connection initiated with $endpointId (${info.endpointName})');
 
     Nearby().acceptConnection(
       endpointId,
@@ -123,8 +121,8 @@ class NearbyService {
 
   /// Called after connection accepted/rejected.
   void _onConnectionResult(String endpointId, Status status) {
+    final name = _endpointNames[endpointId] ?? endpointId;
     if (status == Status.CONNECTED) {
-      final name = _endpointNames[endpointId] ?? endpointId;
       final peer = Peer(
         id: endpointId,
         displayName: name,
@@ -133,27 +131,42 @@ class NearbyService {
         lastConnectedAt: DateTime.now(),
       );
       _connectedPeers[endpointId] = peer;
-      _peersController.add(connectedPeers);
+      _discoveredPeers[endpointId] = peer;
+      _peersController.add(discoveredPeers);
       // ignore: avoid_print
-      print('[NearbyService] Connected to $endpointId ($name)');
+      print('[NearbyService] ✅ Connected to $endpointId ($name)');
+    } else {
+      // ignore: avoid_print
+      print('[NearbyService] Connection rejected/failed for $endpointId: $status');
     }
   }
 
   /// Called when a peer disconnects.
   void _onDisconnected(String endpointId) {
     _connectedPeers.remove(endpointId);
-    _peersController.add(connectedPeers);
+    _discoveredPeers.remove(endpointId);
+    _peersController.add(discoveredPeers);
     // ignore: avoid_print
     print('[NearbyService] Disconnected from $endpointId');
   }
 
   /// Called when Discovery finds an advertising device.
-  /// We immediately request a connection (mesh floods open).
   void _onEndpointFound(
       String endpointId, String endpointName, String serviceId) {
     _endpointNames[endpointId] = endpointName;
     // ignore: avoid_print
-    print('[NearbyService] Endpoint found: $endpointId ($endpointName)');
+    print('[NearbyService] 📡 Endpoint found: $endpointId ($endpointName)');
+
+    final peer = Peer(
+      id: endpointId,
+      displayName: endpointName,
+      isOnline: true,
+      hopDistance: 1,
+      lastConnectedAt: DateTime.now(),
+    );
+    _discoveredPeers[endpointId] = peer;
+    _peersController.add(discoveredPeers);
+
     try {
       Nearby().requestConnection(
         deviceId,
@@ -172,12 +185,12 @@ class NearbyService {
   void _onEndpointLost(String? endpointId) {
     if (endpointId != null) {
       _connectedPeers.remove(endpointId);
-      _peersController.add(connectedPeers);
+      _discoveredPeers.remove(endpointId);
+      _peersController.add(discoveredPeers);
     }
   }
 
   /// Called when a bytes payload arrives from a connected peer.
-  /// Decode JSON → MessageEnvelope → emit to incomingEnvelopeStream.
   void _onPayloadReceived(String endpointId, Payload payload) {
     if (payload.type == PayloadType.BYTES && payload.bytes != null) {
       try {
