@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/database/hive_service.dart';
 import '../../../../core/database/local_storage_repository.dart';
@@ -17,9 +18,10 @@ final localStorageRepositoryProvider = Provider<LocalStorageRepository>((ref) {
   return LocalStorageRepository(hiveService);
 });
 
-/// Provider for current device unique ID (e.g. generated or phone identifier)
+/// Provider for current device unique ID (e.g. Node_4821)
 final currentDeviceIdProvider = Provider<String>((ref) {
-  return 'device_local_user';
+  final randomSuffix = math.Random().nextInt(9000) + 1000;
+  return 'Node_$randomSuffix';
 });
 
 /// Provider for PermissionService — handles BLE + Location runtime permissions
