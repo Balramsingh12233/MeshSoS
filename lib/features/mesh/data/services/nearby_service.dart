@@ -4,6 +4,15 @@ import 'package:nearby_connections/nearby_connections.dart';
 import '../../domain/models/message_envelope.dart';
 import '../../domain/models/peer_model.dart';
 
+/// Status state for Nearby Connections P2P Mesh
+enum MeshStatus {
+  initializing,
+  permissionDenied,
+  locationDisabled,
+  active,
+  error,
+}
+
 /// NearbyService wraps the Google Nearby Connections API for Android.
 ///
 /// Architecture (per official nearby_connections 4.3.0 docs):
@@ -22,28 +31,49 @@ class NearbyService {
   final Map<String, Peer> _connectedPeers = {};
   final Map<String, String> _endpointNames = {};
   bool _isRunning = false;
+  MeshStatus _status = MeshStatus.initializing;
+  String? _lastErrorMessage;
 
   // ── Streams ───────────────────────────────────────────────────────────────
   final _incomingEnvelopeController =
       StreamController<MessageEnvelope>.broadcast();
   final _peersController = StreamController<List<Peer>>.broadcast();
+  final _statusController = StreamController<MeshStatus>.broadcast();
 
   Stream<MessageEnvelope> get incomingEnvelopeStream =>
       _incomingEnvelopeController.stream;
 
   Stream<List<Peer>> get discoveredPeersStream => _peersController.stream;
+  Stream<MeshStatus> get meshStatusStream => _statusController.stream;
 
   List<Peer> get connectedPeers => List.unmodifiable(_connectedPeers.values);
   List<Peer> get discoveredPeers => List.unmodifiable(_discoveredPeers.values);
 
   bool get isRunning => _isRunning;
+  MeshStatus get currentStatus => _status;
+  String? get lastErrorMessage => _lastErrorMessage;
+
+  void _setStatus(MeshStatus newStatus, {String? errorMessage}) {
+    _status = newStatus;
+    _lastErrorMessage = errorMessage;
+    _statusController.add(_status);
+  }
+
+  /// Called by meshBootstrapProvider when runtime permissions are denied.
+  void markPermissionDenied() =>
+      _setStatus(MeshStatus.permissionDenied,
+          errorMessage: 'Bluetooth & Location permissions required');
+
+  /// Called by meshBootstrapProvider when GPS/location service is off.
+  void markLocationDisabled() =>
+      _setStatus(MeshStatus.locationDisabled,
+          errorMessage: 'Location service must be enabled for device discovery');
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /// Start advertising and discovering simultaneously.
   Future<void> startMesh() async {
-    if (_isRunning) return;
-    _isRunning = true;
+    _setStatus(MeshStatus.initializing);
 
     // Stop any stale sessions first for a clean state
     try {
@@ -51,11 +81,30 @@ class NearbyService {
       await Nearby().stopDiscovery();
     } catch (_) {}
 
-    await _startAdvertising();
-    await _startDiscovery();
+    _isRunning = true;
+
+    final advSuccess = await _startAdvertising();
+    final discSuccess = await _startDiscovery();
+
+    if (advSuccess && discSuccess) {
+      _setStatus(MeshStatus.active);
+    } else if (!advSuccess || !discSuccess) {
+      if (_lastErrorMessage != null) {
+        _setStatus(MeshStatus.error, errorMessage: _lastErrorMessage);
+      } else {
+        _setStatus(MeshStatus.active); // Partial active
+      }
+    }
   }
 
-  Future<void> _startAdvertising() async {
+  /// Force restart advertising and discovery (e.g. after permission granted)
+  Future<void> restartMesh() async {
+    _isRunning = false;
+    await stopAll();
+    await startMesh();
+  }
+
+  Future<bool> _startAdvertising() async {
     try {
       await Nearby().startAdvertising(
         deviceId,
@@ -67,13 +116,16 @@ class NearbyService {
       );
       // ignore: avoid_print
       print('[NearbyService] ✅ Advertising started as "$deviceId"');
+      return true;
     } catch (e) {
+      _lastErrorMessage = 'Advertising error: ${e.toString()}';
       // ignore: avoid_print
       print('[NearbyService] ❌ startAdvertising error: $e');
+      return false;
     }
   }
 
-  Future<void> _startDiscovery() async {
+  Future<bool> _startDiscovery() async {
     try {
       await Nearby().startDiscovery(
         deviceId,
@@ -84,9 +136,12 @@ class NearbyService {
       );
       // ignore: avoid_print
       print('[NearbyService] ✅ Discovery started as "$deviceId"');
+      return true;
     } catch (e) {
+      _lastErrorMessage = 'Discovery error: ${e.toString()}';
       // ignore: avoid_print
       print('[NearbyService] ❌ startDiscovery error: $e');
+      return false;
     }
   }
 
@@ -232,5 +287,6 @@ class NearbyService {
     stopAll();
     _incomingEnvelopeController.close();
     _peersController.close();
+    _statusController.close();
   }
 }
