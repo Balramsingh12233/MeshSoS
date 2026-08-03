@@ -1,18 +1,21 @@
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 
-/// ChatInputField is the bottom text composer bar widget.
-/// 
-/// Google Product Design Highlights:
-/// - Rounded pill-shaped TextField matching Material 3 guidelines.
-/// - Dark surface styling (`#1E1E1E`) with subtle border highlight on focus.
-/// - Clean send icon button with active press state.
+/// ChatInputField — bottom message composer bar.
+///
+/// Layout:  [🛡 SOS] [Type a message.....................] [➤]
+///
+/// The SOS shield button sits on the LEFT of the text field,
+/// matching the WhatsApp attachment-button pattern. It is always
+/// visible and never overlaps the send button on the right.
 class ChatInputField extends StatefulWidget {
   final Function(String text) onSendMessage;
+  final VoidCallback? onSosTap;
 
   const ChatInputField({
     super.key,
     required this.onSendMessage,
+    this.onSosTap,
   });
 
   @override
@@ -50,44 +53,80 @@ class _ChatInputFieldState extends State<ChatInputField> {
   @override
   Widget build(BuildContext context) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      color: AppColors.background,
+      padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
+      decoration: BoxDecoration(
+        color: AppColors.background,
+        border: Border(
+          top: BorderSide(color: AppColors.border, width: 0.5),
+        ),
+      ),
       child: SafeArea(
         child: Row(
           children: [
-            // Expanded text input box
+            // ── Left: SOS Shield button ────────────────────────────────────
+            if (widget.onSosTap != null)
+              GestureDetector(
+                onTap: widget.onSosTap,
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  margin: const EdgeInsets.only(right: 8),
+                  decoration: BoxDecoration(
+                    color: AppColors.sosAccent.withOpacity(0.15),
+                    shape: BoxShape.circle,
+                    border: Border.all(
+                      color: AppColors.sosAccent.withOpacity(0.5),
+                      width: 1,
+                    ),
+                  ),
+                  child: const Icon(
+                    Icons.shield_outlined,
+                    color: AppColors.sosAccent,
+                    size: 20,
+                  ),
+                ),
+              ),
+
+            // ── Centre: Pill text field ────────────────────────────────────
             Expanded(
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
                   color: AppColors.surface,
-                  borderRadius: BorderRadius.circular(24), // Pill shape
+                  borderRadius: BorderRadius.circular(24),
                   border: Border.all(color: AppColors.border, width: 1),
                 ),
                 child: TextField(
                   controller: _controller,
-                  style: const TextStyle(color: AppColors.textPrimary, fontSize: 15),
+                  style: const TextStyle(
+                      color: AppColors.textPrimary, fontSize: 15),
                   decoration: const InputDecoration(
                     hintText: 'Type a message...',
-                    hintStyle: TextStyle(color: AppColors.textSecondary, fontSize: 14),
+                    hintStyle: TextStyle(
+                        color: AppColors.textSecondary, fontSize: 14),
                     border: InputBorder.none,
                   ),
                   onSubmitted: (_) => _handleSend(),
                 ),
               ),
             ),
+
             const SizedBox(width: 8),
 
-            // Circular send button
+            // ── Right: Send button ─────────────────────────────────────────
             GestureDetector(
               onTap: _hasText ? _handleSend : null,
               child: CircleAvatar(
-                radius: 22,
-                backgroundColor: _hasText ? AppColors.textPrimary : AppColors.surfaceVariant,
+                radius: 20,
+                backgroundColor: _hasText
+                    ? AppColors.transportMesh
+                    : AppColors.surfaceVariant,
                 child: Icon(
                   Icons.send_rounded,
-                  size: 20,
-                  color: _hasText ? AppColors.background : AppColors.textSecondary,
+                  size: 18,
+                  color: _hasText
+                      ? AppColors.background
+                      : AppColors.textSecondary,
                 ),
               ),
             ),
