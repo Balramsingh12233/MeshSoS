@@ -257,31 +257,38 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             const SizedBox(width: 10),
 
             // ── Name + Mesh subtitle ──────────────────────────────────────
-            Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  widget.peerName,
-                  style: TextStyle(
-                    color: widget.isSosContact
-                        ? const Color(0xFFFF8A80)
-                        : Colors.white,
-                    fontSize: 16,
-                    fontWeight: FontWeight.bold,
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Text(
+                    widget.peerName,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: widget.isSosContact
+                          ? const Color(0xFFFF8A80)
+                          : Colors.white,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
-                ),
-                Text(
-                  widget.isSosContact
-                      ? '🚨 SOS Emergency Contact'
-                      : 'Mesh Radio Reachable (3 Hops)',
-                  style: TextStyle(
-                    color: widget.isSosContact
-                        ? AppColors.sosAccent
-                        : AppColors.transportMesh,
-                    fontSize: 11,
+                  Text(
+                    widget.isSosContact
+                        ? '🚨 SOS Emergency Contact'
+                        : 'Mesh Radio Reachable (3 Hops)',
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: widget.isSosContact
+                          ? AppColors.sosAccent
+                          : AppColors.transportMesh,
+                      fontSize: 11,
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ],
         ),
