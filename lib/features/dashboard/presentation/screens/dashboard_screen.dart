@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/constants/app_colors.dart';
 import '../../../chat/presentation/screens/chat_screen.dart';
+import '../../../chat/presentation/screens/chats_list_screen.dart';
 import '../../../mesh/domain/models/message_envelope.dart';
 import '../../../mesh/domain/providers/mesh_router_provider.dart';
 import '../widgets/radar_visualizer_card.dart';
@@ -9,13 +10,6 @@ import '../widgets/recent_chat_item.dart';
 import '../widgets/sos_panic_card.dart';
 
 /// DashboardScreen is the primary Home Screen of MeshSOS.
-/// 
-/// Google Product Design Highlights:
-/// 1. Top Brand Header: "MeshSOS" logo title + glowing green 'Mesh Online' pill badge.
-/// 2. Interactive Animated Radar Visualizer Card: Concentric radar rings & rotating beam.
-/// 3. Warm Red Emergency Panic SOS Card (#FF4D4D): One-tap emergency broadcast.
-/// 4. Recent Mesh Conversations List: Displays active threads with transport mode badges.
-/// 5. Material 3 Bottom Navigation Bar: (Dashboard 🏠, Radar 📡, Chats 💬, Settings ⚙️).
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -26,9 +20,9 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedBottomNavIndex = 0;
 
-  void _navigateToChatScreen() {
+  void _navigateToChatScreen(String peerName) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => const ChatScreen()),
+      MaterialPageRoute(builder: (_) => ChatScreen(peerName: peerName)),
     );
   }
 
@@ -59,6 +53,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
+    // If user selected 'Chats' tab (index 2), render ChatsListScreen!
+    if (_selectedBottomNavIndex == 2) {
+      return Scaffold(
+        body: const ChatsListScreen(),
+        bottomNavigationBar: _buildBottomNav(),
+      );
+    }
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -66,7 +68,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         elevation: 0,
         title: Row(
           children: [
-            // App Logo Icon
             Container(
               padding: const EdgeInsets.all(6),
               decoration: const BoxDecoration(
@@ -80,8 +81,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
             const SizedBox(width: 8),
-            
-            // App Name with warm red SOS text
             RichText(
               text: const TextSpan(
                 style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
@@ -94,7 +93,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
-          // Glowing 'Mesh Online' status badge matching mockup
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -135,10 +133,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // 1. Top Section: Interactive Animated Radar Visualizer Card
-            const RadarVisualizerCard(activePeerCount: 3),
+            // 1. Radar Visualizer Card
+            const RadarVisualizerCard(activePeerCount: 4),
 
-            // 2. Middle Section: Warm Red Emergency Panic SOS Card (#FF4D4D)
+            // 2. SOS Panic Card
             SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
             const SizedBox(height: 12),
@@ -156,65 +154,64 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
               ),
             ),
 
-            // 3. Recent Chat Threads Matching Mockup Screenshot
+            // 3. Recent Chat Threads
             RecentChatItem(
               peerName: 'John',
               lastMessageText: "Hello, that's your message?",
               mode: DeliveryStatus.sentMesh,
-              onTap: _navigateToChatScreen,
+              onTap: () => _navigateToChatScreen('John'),
             ),
             RecentChatItem(
               peerName: 'Mesh Hinsez',
               lastMessageText: 'Hello, mreth.',
               mode: DeliveryStatus.sentCloud,
-              onTap: _navigateToChatScreen,
+              onTap: () => _navigateToChatScreen('Mesh Hinsez'),
             ),
             RecentChatItem(
               peerName: 'Dirok Huvinro',
               lastMessageText: 'Messages that automatically use SMS as backup.',
               mode: DeliveryStatus.sentSms,
-              onTap: _navigateToChatScreen,
+              onTap: () => _navigateToChatScreen('Dirok Huvinro'),
             ),
 
             const SizedBox(height: 20),
           ],
         ),
       ),
+      bottomNavigationBar: _buildBottomNav(),
+    );
+  }
 
-      // 4. Material 3 Bottom Navigation Bar
-      bottomNavigationBar: BottomNavigationBar(
-        currentIndex: _selectedBottomNavIndex,
-        onTap: (index) {
-          setState(() {
-            _selectedBottomNavIndex = index;
-          });
-          if (index == 2) {
-            _navigateToChatScreen();
-          }
-        },
-        backgroundColor: AppColors.surface,
-        selectedItemColor: AppColors.textPrimary,
-        unselectedItemColor: AppColors.textSecondary,
-        type: BottomNavigationBarType.fixed,
-        items: const [
-          BottomNavigationBarItem(
-            icon: Icon(Icons.grid_view_rounded),
-            label: 'Dashboard',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.radar_rounded),
-            label: 'Radar',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.chat_bubble_outline_rounded),
-            label: 'Chats',
-          ),
-          BottomNavigationBarItem(
-            icon: Icon(Icons.settings_outlined),
-            label: 'Settings',
-          ),
-        ],
-      ),
+  Widget _buildBottomNav() {
+    return BottomNavigationBar(
+      currentIndex: _selectedBottomNavIndex,
+      onTap: (index) {
+        setState(() {
+          _selectedBottomNavIndex = index;
+        });
+      },
+      backgroundColor: AppColors.surface,
+      selectedItemColor: AppColors.textPrimary,
+      unselectedItemColor: AppColors.textSecondary,
+      type: BottomNavigationBarType.fixed,
+      items: const [
+        BottomNavigationBarItem(
+          icon: Icon(Icons.grid_view_rounded),
+          label: 'Dashboard',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.radar_rounded),
+          label: 'Radar',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.chat_bubble_outline_rounded),
+          label: 'Chats',
+        ),
+        BottomNavigationBarItem(
+          icon: Icon(Icons.settings_outlined),
+          label: 'Settings',
+        ),
+      ],
     );
   }
 }
