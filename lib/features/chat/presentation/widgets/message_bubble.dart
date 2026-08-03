@@ -127,24 +127,24 @@ class MessageBubble extends StatelessWidget {
             const SizedBox(height: 10),
 
             // Multi-Transport Badges Row & Timestamp matching Mockup Screenshot
-            Row(
-              mainAxisSize: MainAxisSize.min,
+            Wrap(
+              spacing: 6,
+              runSpacing: 4,
+              crossAxisAlignment: WrapCrossAlignment.center,
               children: [
                 // Primary Transport Badge
                 StatusBadge(
                   status: envelope.deliveryStatus,
                   hopCount: envelope.hopCount > 0 ? envelope.hopCount : 3,
                 ),
-                
+
                 // Show dual badge (e.g. Mesh + Cloud Sync) for dual-path delivered messages
                 if (isMe && envelope.deliveryStatus == DeliveryStatus.sentMesh) ...[
-                  const SizedBox(width: 6),
                   const StatusBadge(
                     status: DeliveryStatus.sentCloud,
                   ),
                 ],
 
-                const SizedBox(width: 8),
                 Text(
                   _formatTimestamp(envelope.timestamp),
                   style: const TextStyle(
