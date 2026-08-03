@@ -31,6 +31,7 @@ class NearbyService {
 
   // ── State ─────────────────────────────────────────────────────────────────
   final Map<String, Peer> _connectedPeers = {};
+  final Map<String, String> _endpointNames = {};
   bool _isRunning = false;
 
   // ── Streams ───────────────────────────────────────────────────────────────
@@ -95,6 +96,7 @@ class NearbyService {
   Future<void> stopAll() async {
     _isRunning = false;
     _connectedPeers.clear();
+    _endpointNames.clear();
     _peersController.add([]);
     try {
       await Nearby().stopAdvertising();
@@ -108,6 +110,7 @@ class NearbyService {
   /// Called when a remote device initiates OR responds to a connection.
   /// We auto-accept all peers (open mesh trust model for emergency use).
   void _onConnectionInitiated(String endpointId, ConnectionInfo info) {
+    _endpointNames[endpointId] = info.endpointName;
     // ignore: avoid_print
     print('[NearbyService] Connection initiated: $endpointId (${info.endpointName})');
 
@@ -121,9 +124,10 @@ class NearbyService {
   /// Called after connection accepted/rejected.
   void _onConnectionResult(String endpointId, Status status) {
     if (status == Status.CONNECTED) {
+      final name = _endpointNames[endpointId] ?? endpointId;
       final peer = Peer(
         id: endpointId,
-        displayName: endpointId,
+        displayName: name,
         isOnline: true,
         hopDistance: 1,
         lastConnectedAt: DateTime.now(),
@@ -131,7 +135,7 @@ class NearbyService {
       _connectedPeers[endpointId] = peer;
       _peersController.add(connectedPeers);
       // ignore: avoid_print
-      print('[NearbyService] Connected to $endpointId');
+      print('[NearbyService] Connected to $endpointId ($name)');
     }
   }
 
@@ -147,6 +151,7 @@ class NearbyService {
   /// We immediately request a connection (mesh floods open).
   void _onEndpointFound(
       String endpointId, String endpointName, String serviceId) {
+    _endpointNames[endpointId] = endpointName;
     // ignore: avoid_print
     print('[NearbyService] Endpoint found: $endpointId ($endpointName)');
     try {
