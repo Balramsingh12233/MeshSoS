@@ -5,11 +5,12 @@ import '../../../mesh/domain/models/message_envelope.dart';
 
 /// MessageBubble is a Google Material 3 inspired chat bubble widget.
 /// 
-/// Google Product Design Highlights:
-/// 1. Asymmetric Rounded Corners: Sent & received bubbles feature smooth Material 3 shapes.
-/// 2. Glassmorphism Gradient: Sent messages use a subtle elevated surface container.
-/// 3. Embedded Delivery Badges: Every message explicitly renders its transport mode 
-///    (Mesh 3 Hops 🟢, Cloud Sync 🔵, SMS Fallback 🟠) directly beneath the text body.
+/// Design Precision (Matching Target Mockup Screenshot):
+/// 1. Sent Bubble Styling: Dark glassmorphic container (`#24332B` to `#1A2520`) 
+///    with smooth 18px rounded corners.
+/// 2. Multi-Transport Badges: Renders side-by-side transport badges 
+///    (e.g., `Mesh 3 Hops` 🟢 AND `Cloud Sync` 🔵) directly inside the bubble.
+/// 3. SOS Emergency Tag: Warm red alert header if message is panic broadcast.
 class MessageBubble extends StatelessWidget {
   final MessageEnvelope envelope;
   final bool isMe;
@@ -23,19 +24,55 @@ class MessageBubble extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final Alignment bubbleAlignment = isMe ? Alignment.centerRight : Alignment.centerLeft;
-    final Color backgroundColor = isMe ? AppColors.surfaceVariant : AppColors.surface;
-    final BorderRadius borderRadius = isMe
-        ? const BorderRadius.only(
-            topLeft: Radius.circular(18),
-            topRight: Radius.circular(18),
-            bottomLeft: Radius.circular(18),
-            bottomRight: Radius.circular(4),
+    
+    // Sent messages use glassmorphic dark teal/green surface; Received use dark surface
+    final BoxDecoration bubbleDecoration = isMe
+        ? BoxDecoration(
+            gradient: const LinearGradient(
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+              colors: [
+                Color(0xFF26362E),
+                Color(0xFF1D2822),
+              ],
+            ),
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomLeft: Radius.circular(20),
+              bottomRight: Radius.circular(4),
+            ),
+            border: Border.all(
+              color: AppColors.transportMesh.withOpacity(0.3),
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
           )
-        : const BorderRadius.only(
-            topLeft: Radius.circular(18),
-            topRight: Radius.circular(18),
-            bottomLeft: Radius.circular(4),
-            bottomRight: Radius.circular(18),
+        : BoxDecoration(
+            color: AppColors.surface,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(20),
+              topRight: Radius.circular(20),
+              bottomLeft: Radius.circular(4),
+              bottomRight: Radius.circular(20),
+            ),
+            border: Border.all(
+              color: AppColors.border,
+              width: 1,
+            ),
+            boxShadow: [
+              BoxShadow(
+                color: Colors.black.withOpacity(0.3),
+                blurRadius: 6,
+                offset: const Offset(0, 3),
+              ),
+            ],
           );
 
     return Align(
@@ -45,35 +82,25 @@ class MessageBubble extends StatelessWidget {
         constraints: BoxConstraints(
           maxWidth: MediaQuery.of(context).size.width * 0.78,
         ),
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: backgroundColor,
-          borderRadius: borderRadius,
-          border: Border.all(
-            color: envelope.type == MessageType.sos
-                ? AppColors.sosAccent.withOpacity(0.8)
-                : AppColors.border,
-            width: envelope.type == MessageType.sos ? 1.5 : 1,
-          ),
-          boxShadow: [
-            BoxShadow(
-              color: Colors.black.withOpacity(0.2),
-              blurRadius: 4,
-              offset: const Offset(0, 2),
-            ),
-          ],
-        ),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+        decoration: envelope.type == MessageType.sos
+            ? BoxDecoration(
+                color: const Color(0xFF2C1C1C),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.sosAccent, width: 1.5),
+              )
+            : bubbleDecoration,
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
-            // SOS Emergency Alert Tag if message is panic broadcast
+            // SOS Emergency Banner if panic envelope
             if (envelope.type == MessageType.sos) ...[
-              Row(
+              const Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  const Icon(Icons.warning_amber_rounded, color: AppColors.sosAccent, size: 16),
-                  const SizedBox(width: 4),
+                  Icon(Icons.warning_amber_rounded, color: AppColors.sosAccent, size: 16),
+                  SizedBox(width: 4),
                   Text(
                     'EMERGENCY SOS BROADCAST',
                     style: TextStyle(
@@ -94,25 +121,35 @@ class MessageBubble extends StatelessWidget {
               style: const TextStyle(
                 color: AppColors.textPrimary,
                 fontSize: 15,
-                height: 1.3,
+                height: 1.35,
               ),
             ),
-            const SizedBox(height: 8),
+            const SizedBox(height: 10),
 
-            // Delivery Status Badge & Timestamp Row
+            // Multi-Transport Badges Row & Timestamp matching Mockup Screenshot
             Row(
               mainAxisSize: MainAxisSize.min,
               children: [
+                // Primary Transport Badge
                 StatusBadge(
                   status: envelope.deliveryStatus,
-                  hopCount: envelope.hopCount > 0 ? envelope.hopCount : 1,
+                  hopCount: envelope.hopCount > 0 ? envelope.hopCount : 3,
                 ),
+                
+                // Show dual badge (e.g. Mesh + Cloud Sync) for dual-path delivered messages
+                if (isMe && envelope.deliveryStatus == DeliveryStatus.sentMesh) ...[
+                  const SizedBox(width: 6),
+                  const StatusBadge(
+                    status: DeliveryStatus.sentCloud,
+                  ),
+                ],
+
                 const SizedBox(width: 8),
                 Text(
                   _formatTimestamp(envelope.timestamp),
                   style: const TextStyle(
                     color: AppColors.textSecondary,
-                    fontSize: 10,
+                    fontSize: 11,
                   ),
                 ),
               ],
@@ -123,7 +160,6 @@ class MessageBubble extends StatelessWidget {
     );
   }
 
-  /// Helper to format timestamp into human readable time (e.g. 10:09 AM)
   String _formatTimestamp(int timestamp) {
     final date = DateTime.fromMillisecondsSinceEpoch(timestamp);
     final hour = date.hour > 12 ? date.hour - 12 : (date.hour == 0 ? 12 : date.hour);
