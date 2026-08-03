@@ -93,24 +93,35 @@ final nearbyPeersProvider = StreamProvider<List<Peer>>((ref) {
   return nearbyService.discoveredPeersStream;
 });
 
+/// StreamProvider that emits live MeshStatus for error card UI.
+///
+/// WHY: The dashboard needs to reactively show actionable error cards
+/// (permission denied, GPS off, advertising error) when mesh startup fails.
+final meshStatusProvider = StreamProvider<MeshStatus>((ref) {
+  final nearbyService = ref.watch(nearbyServiceProvider);
+  return nearbyService.meshStatusStream;
+});
+
 /// FutureProvider that bootstraps the full mesh on first read.
 ///
-/// WHY: Permissions must be requested and Nearby must be started ONCE
-/// when the app opens. This provider is watched by MeshBootstrapWidget
-/// so it triggers automatically at app launch without any manual call.
-///
-/// Flow: requestAllPermissions() → startMesh() (advertise + discover)
+/// Flow: requestAllPermissions() → isLocationServiceEnabled() → startMesh()
 final meshBootstrapProvider = FutureProvider<bool>((ref) async {
   final permService = ref.watch(permissionServiceProvider);
   final nearbyService = ref.watch(nearbyServiceProvider);
 
   // Step 1: Request all runtime permissions (BLE + Location)
   final granted = await permService.requestAllPermissions();
-  if (!granted) return false;
+  if (!granted) {
+    nearbyService.markPermissionDenied();
+    return false;
+  }
 
-  // Step 2: Check GPS is on (Nearby requires location service)
+  // Step 2: Check GPS is on (Nearby requires location service enabled)
   final locationOn = await permService.isLocationServiceEnabled();
-  if (!locationOn) return false;
+  if (!locationOn) {
+    nearbyService.markLocationDisabled();
+    return false;
+  }
 
   // Step 3: Start advertising + discovery simultaneously
   await nearbyService.startMesh();
