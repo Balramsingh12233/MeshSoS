@@ -8,13 +8,22 @@ import '../widgets/chat_input_field.dart';
 import '../widgets/message_bubble.dart';
 import '../widgets/network_status_strip.dart';
 
-/// ChatScreen is the WhatsApp / Google Messages styled chat conversation screen.
+/// ChatScreen — WhatsApp / Google Messages styled chat conversation screen.
+///
+/// Avatar in AppBar uses [avatarColor] + [initials] matching the ChatsListScreen
+/// tile so the design is fully consistent across both screens.
 class ChatScreen extends ConsumerStatefulWidget {
   final String peerName;
+  final Color avatarColor;
+  final String? initials;
+  final bool isSosContact;
 
   const ChatScreen({
     super.key,
     this.peerName = 'John',
+    this.avatarColor = const Color(0xFF0D3B66),
+    this.initials,
+    this.isSosContact = false,
   });
 
   @override
@@ -56,40 +65,50 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     final myId = ref.read(currentDeviceIdProvider);
     final demoMessages = [
       MessageEnvelope(
-        senderId: 'peer_john',
+        senderId: 'peer_contact',
         recipientId: myId,
         payload: 'Hi, this is so cool for an advanced offline emergency chat app.',
         deliveryStatus: DeliveryStatus.sentMesh,
         hopCount: 3,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 10)).millisecondsSinceEpoch,
+        timestamp: DateTime.now()
+            .subtract(const Duration(minutes: 10))
+            .millisecondsSinceEpoch,
       ),
       MessageEnvelope(
         senderId: myId,
         payload: 'Hello, now I am testing how messages relay across devices.',
         deliveryStatus: DeliveryStatus.sentMesh,
         hopCount: 3,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 8)).millisecondsSinceEpoch,
+        timestamp: DateTime.now()
+            .subtract(const Duration(minutes: 8))
+            .millisecondsSinceEpoch,
       ),
       MessageEnvelope(
-        senderId: 'peer_john',
+        senderId: 'peer_contact',
         recipientId: myId,
         payload: 'Are you confirmed with purely mesh network route?',
         deliveryStatus: DeliveryStatus.sentCloud,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 5)).millisecondsSinceEpoch,
+        timestamp: DateTime.now()
+            .subtract(const Duration(minutes: 5))
+            .millisecondsSinceEpoch,
       ),
       MessageEnvelope(
         senderId: myId,
         payload: 'What is your next test step?',
         deliveryStatus: DeliveryStatus.sentMesh,
         hopCount: 1,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 3)).millisecondsSinceEpoch,
+        timestamp: DateTime.now()
+            .subtract(const Duration(minutes: 3))
+            .millisecondsSinceEpoch,
       ),
       MessageEnvelope(
-        senderId: 'peer_bob',
+        senderId: 'peer_contact',
         recipientId: myId,
         payload: 'Messages that automatically use SMS as a backup.',
         deliveryStatus: DeliveryStatus.sentSms,
-        timestamp: DateTime.now().subtract(const Duration(minutes: 1)).millisecondsSinceEpoch,
+        timestamp: DateTime.now()
+            .subtract(const Duration(minutes: 1))
+            .millisecondsSinceEpoch,
       ),
     ];
 
@@ -167,62 +186,98 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     );
   }
 
+  /// Derive display initials from peerName if none passed explicitly.
+  String _resolveInitials() {
+    if (widget.initials != null && widget.initials!.isNotEmpty) {
+      return widget.initials!;
+    }
+    final parts = widget.peerName.trim().split(' ');
+    if (parts.length >= 2) {
+      return '${parts[0][0]}${parts[1][0]}'.toUpperCase();
+    }
+    return widget.peerName.substring(0, 2).toUpperCase();
+  }
+
   @override
   Widget build(BuildContext context) {
     final myId = ref.watch(currentDeviceIdProvider);
+    final initials = _resolveInitials();
 
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
         backgroundColor: AppColors.background,
         elevation: 0,
+
+        // Back button
         leading: IconButton(
           icon: const Icon(Icons.arrow_back_rounded, color: Colors.white),
           onPressed: () => Navigator.of(context).pop(),
         ),
+
         title: Row(
           children: [
-            // WhatsApp-style User Profile Avatar + Online Green Indicator
+            // ── Avatar matching ChatsListScreen tile ──────────────────────
             Stack(
               children: [
                 CircleAvatar(
-                  radius: 18,
-                  backgroundColor: AppColors.surfaceVariant,
-                  child: const Icon(Icons.person_rounded, color: Colors.white, size: 20),
+                  radius: 20,
+                  backgroundColor: widget.avatarColor,
+                  child: widget.isSosContact
+                      ? const Icon(Icons.warning_amber_rounded,
+                          color: Colors.white, size: 20)
+                      : Text(
+                          initials,
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 13,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
                 ),
+                // Online dot
                 Positioned(
                   right: 0,
                   bottom: 0,
                   child: Container(
-                    width: 9,
-                    height: 9,
+                    width: 10,
+                    height: 10,
                     decoration: BoxDecoration(
-                      color: AppColors.transportMesh,
+                      color: widget.isSosContact
+                          ? AppColors.sosAccent
+                          : AppColors.transportMesh,
                       shape: BoxShape.circle,
-                      border: Border.all(color: AppColors.background, width: 1.5),
+                      border: Border.all(
+                          color: AppColors.background, width: 1.5),
                     ),
                   ),
                 ),
               ],
             ),
             const SizedBox(width: 10),
-            
-            // Name + Mesh Reachable Subtitle
+
+            // ── Name + Mesh subtitle ──────────────────────────────────────
             Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
                   widget.peerName,
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: widget.isSosContact
+                        ? const Color(0xFFFF8A80)
+                        : Colors.white,
                     fontSize: 16,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
-                const Text(
-                  'Mesh Radio Reachable (3 Hops)',
+                Text(
+                  widget.isSosContact
+                      ? '🚨 SOS Emergency Contact'
+                      : 'Mesh Radio Reachable (3 Hops)',
                   style: TextStyle(
-                    color: AppColors.transportMesh,
+                    color: widget.isSosContact
+                        ? AppColors.sosAccent
+                        : AppColors.transportMesh,
                     fontSize: 11,
                   ),
                 ),
@@ -230,53 +285,45 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             ),
           ],
         ),
+
         actions: [
+          IconButton(
+            icon: const Icon(Icons.call_outlined, color: Colors.white, size: 22),
+            onPressed: () {},
+          ),
           IconButton(
             icon: const Icon(Icons.more_vert_rounded, color: Colors.white),
             onPressed: () {},
           ),
         ],
       ),
-      body: Stack(
+
+      body: Column(
         children: [
-          Column(
-            children: [
-              // Top Persistent Connectivity Status Strip
-              const NetworkStatusStrip(
-                currentMode: DeliveryStatus.sentMesh,
-                activePeerCount: 3,
-              ),
-
-              // Chat Thread Message History
-              Expanded(
-                child: ListView.builder(
-                  controller: _scrollController,
-                  padding: const EdgeInsets.only(top: 12, bottom: 80),
-                  itemCount: _messages.length,
-                  itemBuilder: (context, index) {
-                    final envelope = _messages[index];
-                    final isMe = envelope.senderId == myId;
-                    return MessageBubble(envelope: envelope, isMe: isMe);
-                  },
-                ),
-              ),
-
-              // Bottom Input Composer Bar
-              ChatInputField(onSendMessage: _handleSendMessage),
-            ],
+          // Connectivity Status Strip
+          const NetworkStatusStrip(
+            currentMode: DeliveryStatus.sentMesh,
+            activePeerCount: 3,
           ),
 
-          // Floating Warm Red SOS FAB at Bottom Right matching mockup
-          Positioned(
-            right: 16,
-            bottom: 72,
-            child: FloatingActionButton(
-              elevation: 8,
-              backgroundColor: AppColors.sosAccent,
-              foregroundColor: Colors.white,
-              onPressed: _handleSosBroadcast,
-              child: const Icon(Icons.shield_outlined, size: 26),
+          // Message History
+          Expanded(
+            child: ListView.builder(
+              controller: _scrollController,
+              padding: const EdgeInsets.only(top: 12, bottom: 20),
+              itemCount: _messages.length,
+              itemBuilder: (context, index) {
+                final envelope = _messages[index];
+                final isMe = envelope.senderId == myId;
+                return MessageBubble(envelope: envelope, isMe: isMe);
+              },
             ),
+          ),
+
+          // Chat Input Composer — SOS shield lives inside the input row (left side)
+          ChatInputField(
+            onSendMessage: _handleSendMessage,
+            onSosTap: _handleSosBroadcast,
           ),
         ],
       ),
