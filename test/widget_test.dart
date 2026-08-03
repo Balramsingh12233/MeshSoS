@@ -1,14 +1,20 @@
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:mesh_sos/app.dart';
 
 void main() {
-  testWidgets('MeshSOSApp baseline widget smoke test', (WidgetTester tester) async {
-    // Build MeshSOSApp foundation screen
-    await tester.pumpWidget(const MeshSOSApp());
+  testWidgets('MeshSOSApp ChatScreen Google Product Design UI test', (WidgetTester tester) async {
+    // Build MeshSOSApp wrapped in ProviderScope for Riverpod state management
+    await tester.pumpWidget(
+      const ProviderScope(
+        child: MeshSOSApp(),
+      ),
+    );
+    await tester.pumpAndSettle();
 
-    // Verify title and emergency UI elements exist
-    expect(find.text('MeshSOS Emergency System'), findsOneWidget);
-    expect(find.text('BROADCAST SOS'), findsOneWidget);
-    expect(find.text('Network Mode: Offline Mesh Active'), findsOneWidget);
+    // Verify AppBar title & Google Product Design chat UI elements
+    expect(find.text('MeshSOS'), findsOneWidget);
+    expect(find.text('Type a message...'), findsOneWidget);
+    expect(find.text('Mesh Active - 3 Peers Nearby'), findsOneWidget);
   });
 }
