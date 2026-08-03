@@ -39,7 +39,7 @@ abstract class AppTheme {
       ),
 
       // Card elevation and dark surface background
-      cardTheme: CardTheme(
+      cardTheme: CardThemeData(
         color: AppColors.surface,
         elevation: 2,
         shape: RoundedRectangleBorder(
