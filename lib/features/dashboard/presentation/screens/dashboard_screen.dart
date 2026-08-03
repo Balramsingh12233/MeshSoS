@@ -20,9 +20,19 @@ class DashboardScreen extends ConsumerStatefulWidget {
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedBottomNavIndex = 0;
 
-  void _navigateToChatScreen(String peerName) {
+  void _navigateToChatScreen(
+    String peerName, {
+    Color avatarColor = const Color(0xFF0D3B66),
+    String? initials,
+  }) {
     Navigator.of(context).push(
-      MaterialPageRoute(builder: (_) => ChatScreen(peerName: peerName)),
+      MaterialPageRoute(
+        builder: (_) => ChatScreen(
+          peerName: peerName,
+          avatarColor: avatarColor,
+          initials: initials,
+        ),
+      ),
     );
   }
 
@@ -128,55 +138,68 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ),
         ],
       ),
-      body: SingleChildScrollView(
-        physics: const BouncingScrollPhysics(),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // 1. Radar Visualizer Card
-            const RadarVisualizerCard(activePeerCount: 4),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // ── FIXED SECTION: Radar + SOS Panic card (does NOT scroll) ────────
+          const RadarVisualizerCard(activePeerCount: 4),
+          SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
-            // 2. SOS Panic Card
-            SosPanicCard(onTriggerSos: _handleSosBroadcast),
+          const SizedBox(height: 12),
 
-            const SizedBox(height: 12),
-
-            // Recent Conversations Header
-            const Padding(
-              padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-              child: Text(
-                'Recent Conversations',
-                style: TextStyle(
-                  color: AppColors.textSecondary,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
+          // Recent Conversations header (also fixed)
+          const Padding(
+            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Text(
+              'Recent Conversations',
+              style: TextStyle(
+                color: AppColors.textSecondary,
+                fontSize: 14,
+                fontWeight: FontWeight.w600,
               ),
             ),
+          ),
 
-            // 3. Recent Chat Threads
-            RecentChatItem(
-              peerName: 'John',
-              lastMessageText: "Hello, that's your message?",
-              mode: DeliveryStatus.sentMesh,
-              onTap: () => _navigateToChatScreen('John'),
+          // ── SCROLLABLE SECTION: only the chat list scrolls ──────────────────
+          Expanded(
+            child: ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 16),
+              children: [
+                RecentChatItem(
+                  peerName: 'John',
+                  lastMessageText: "Hello, that's your message?",
+                  mode: DeliveryStatus.sentMesh,
+                  onTap: () => _navigateToChatScreen(
+                    'John',
+                    avatarColor: const Color(0xFF0D3B66),
+                    initials: 'JN',
+                  ),
+                ),
+                RecentChatItem(
+                  peerName: 'Mesh Hinsez',
+                  lastMessageText: 'Hello, mreth.',
+                  mode: DeliveryStatus.sentCloud,
+                  onTap: () => _navigateToChatScreen(
+                    'Mesh Hinsez',
+                    avatarColor: const Color(0xFF311B92),
+                    initials: 'MH',
+                  ),
+                ),
+                RecentChatItem(
+                  peerName: 'Dirok Huvinro',
+                  lastMessageText: 'Messages that automatically use SMS as backup.',
+                  mode: DeliveryStatus.sentSms,
+                  onTap: () => _navigateToChatScreen(
+                    'Dirok Huvinro',
+                    avatarColor: const Color(0xFF4E342E),
+                    initials: 'DH',
+                  ),
+                ),
+              ],
             ),
-            RecentChatItem(
-              peerName: 'Mesh Hinsez',
-              lastMessageText: 'Hello, mreth.',
-              mode: DeliveryStatus.sentCloud,
-              onTap: () => _navigateToChatScreen('Mesh Hinsez'),
-            ),
-            RecentChatItem(
-              peerName: 'Dirok Huvinro',
-              lastMessageText: 'Messages that automatically use SMS as backup.',
-              mode: DeliveryStatus.sentSms,
-              onTap: () => _navigateToChatScreen('Dirok Huvinro'),
-            ),
-
-            const SizedBox(height: 20),
-          ],
-        ),
+          ),
+        ],
       ),
       bottomNavigationBar: _buildBottomNav(),
     );
