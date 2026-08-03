@@ -2,20 +2,13 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import '../../../../core/constants/app_colors.dart';
 
-/// RadarVisualizerCard renders an immersive full-card animated radar scanner.
-/// 
-/// Design Precision (Matching Mockup Image 2):
-/// 1. Full-Card Expanding Orbital Rings: Concentric radar circles expand across 
-///    the full width of the card container instead of being constrained to a small center circle.
-/// 2. Luminous Neon Green Glow: Uses Paint mask filters and multi-layered stroke 
-///    effects to give the radar rings and orbital node points a vibrant neon glow (`#00E676`).
-/// 3. Orbital Node Points: Node dots sit directly along the circular orbital paths.
+/// RadarVisualizerCard renders the full-card glowing radar scanner matching Mockup 100%.
 class RadarVisualizerCard extends StatefulWidget {
   final int activePeerCount;
 
   const RadarVisualizerCard({
     super.key,
-    this.activePeerCount = 4,
+    this.activePeerCount = 0,
   });
 
   @override
@@ -29,10 +22,9 @@ class _RadarVisualizerCardState extends State<RadarVisualizerCard>
   @override
   void initState() {
     super.initState();
-    // 5-second smooth rotating radar sweep
     _controller = AnimationController(
       vsync: this,
-      duration: const Duration(seconds: 5),
+      duration: const Duration(seconds: 4),
     )..repeat();
   }
 
@@ -46,10 +38,19 @@ class _RadarVisualizerCardState extends State<RadarVisualizerCard>
   Widget build(BuildContext context) {
     return Container(
       width: double.infinity,
-      height: 220, // Increased height for full-card immersive radar
+      height: 220,
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
       decoration: BoxDecoration(
-        color: AppColors.surface,
+        // Dark green-black gradient background matching target mockup screenshot exactly
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFF0A1811),
+            Color(0xFF12281C),
+            Color(0xFF09140E),
+          ],
+        ),
         borderRadius: BorderRadius.circular(24),
         border: Border.all(
           color: AppColors.transportMesh.withOpacity(0.5),
@@ -57,7 +58,7 @@ class _RadarVisualizerCardState extends State<RadarVisualizerCard>
         ),
         boxShadow: [
           BoxShadow(
-            color: AppColors.transportMesh.withOpacity(0.12),
+            color: AppColors.transportMesh.withOpacity(0.15),
             blurRadius: 16,
             spreadRadius: 2,
           ),
@@ -69,7 +70,7 @@ class _RadarVisualizerCardState extends State<RadarVisualizerCard>
           animation: _controller,
           builder: (context, child) {
             return CustomPaint(
-              painter: _ImmersiveRadarPainter(
+              painter: _MockupRadarPainter(
                 angle: _controller.value * 2 * math.pi,
                 peerCount: widget.activePeerCount,
               ),
@@ -81,66 +82,62 @@ class _RadarVisualizerCardState extends State<RadarVisualizerCard>
   }
 }
 
-/// CustomPainter delivering full-card glowing radar visuals
-class _ImmersiveRadarPainter extends CustomPainter {
+class _MockupRadarPainter extends CustomPainter {
   final double angle;
   final int peerCount;
 
-  _ImmersiveRadarPainter({required this.angle, required this.peerCount});
+  _MockupRadarPainter({required this.angle, required this.peerCount});
 
   @override
   void paint(Canvas canvas, Size size) {
     final center = Offset(size.width / 2, size.height / 2);
-    
-    // Set maxRadius large enough so rings fill full container width
-    final maxRadius = size.width * 0.65;
+    // Expand radius so rings fill the ENTIRE card box edge-to-edge
+    final maxRadius = size.width * 0.72;
 
-    // 1. Draw 5 Glowing Concentric Orbital Rings
+    // 1. Draw 5 Luminous Neon Green Concentric Rings
     final glowPaint = Paint()
-      ..color = AppColors.transportMesh.withOpacity(0.35)
+      ..color = AppColors.transportMesh.withOpacity(0.4)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = 2.5
-      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 4.0);
+      ..strokeWidth = 2.2
+      ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 3.5);
 
     final linePaint = Paint()
-      ..color = AppColors.transportMesh.withOpacity(0.7)
+      ..color = AppColors.transportMesh.withOpacity(0.75)
       ..style = PaintingStyle.stroke
       ..strokeWidth = 1.2;
 
     for (int i = 1; i <= 5; i++) {
       final r = maxRadius * (i / 5);
-      // Draw outer neon glow ring
       canvas.drawCircle(center, r, glowPaint);
-      // Draw crisp inner ring
       canvas.drawCircle(center, r, linePaint);
     }
 
-    // 2. Draw Rotating Radar Sweep Gradient Beam
+    // 2. Rotating Radar Sweep Gradient Beam
     final sweepPaint = Paint()
       ..shader = SweepGradient(
         center: Alignment.center,
         startAngle: 0.0,
-        endAngle: math.pi * 0.6, // 108 degree sweep arc
+        endAngle: math.pi * 0.65,
         colors: [
           AppColors.transportMesh.withOpacity(0.0),
-          AppColors.transportMesh.withOpacity(0.4),
+          AppColors.transportMesh.withOpacity(0.45),
         ],
         transform: GradientRotation(angle),
       ).createShader(Rect.fromCircle(center: center, radius: maxRadius));
 
     canvas.drawCircle(center, maxRadius, sweepPaint);
 
-    // 3. Draw Discovered Mesh Peer Node Dots Along Orbital Rings
-    final nodeSolidPaint = Paint()
+    // 3. Glowing Node Dots Positioned Directly On Ring Orbits
+    final nodePaint = Paint()
       ..color = AppColors.transportMesh
       ..style = PaintingStyle.fill;
 
-    final nodeGlowPaint = Paint()
+    final nodeGlow = Paint()
       ..color = AppColors.transportMesh
       ..style = PaintingStyle.fill
       ..maskFilter = const MaskFilter.blur(BlurStyle.normal, 8);
 
-    // Calculate node positions along specific orbital ring radii & angles matching mockup image 2
+    // Radii of ring 2, 3, 4, 5
     final ringRadii = [
       maxRadius * (2 / 5),
       maxRadius * (3 / 5),
@@ -149,14 +146,14 @@ class _ImmersiveRadarPainter extends CustomPainter {
     ];
 
     final nodeAngles = [
-      -math.pi * 0.2, // Top right orbital
-      math.pi * 0.15,  // Mid right orbital
-      math.pi * 0.7,   // Bottom left orbital
-      -math.pi * 0.8,  // Top left orbital
+      -math.pi * 0.25, // Top Right
+      math.pi * 0.1,   // Right
+      math.pi * 0.65,  // Bottom Left
+      -math.pi * 0.75, // Top Left
     ];
 
-    final countToDraw = math.min(peerCount, ringRadii.length);
-    for (int i = 0; i < countToDraw; i++) {
+    final drawCount = math.min(peerCount, ringRadii.length);
+    for (int i = 0; i < drawCount; i++) {
       final r = ringRadii[i];
       final a = nodeAngles[i];
       final pos = Offset(
@@ -164,15 +161,15 @@ class _ImmersiveRadarPainter extends CustomPainter {
         center.dy + r * math.sin(a),
       );
 
-      // Draw strong neon glow outer aura
-      canvas.drawCircle(pos, 10, nodeGlowPaint);
-      // Draw inner solid node dot
-      canvas.drawCircle(pos, 6, nodeSolidPaint);
+      // Glowing aura
+      canvas.drawCircle(pos, 11, nodeGlow);
+      // Bright core dot
+      canvas.drawCircle(pos, 6, nodePaint);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _ImmersiveRadarPainter oldDelegate) {
+  bool shouldRepaint(covariant _MockupRadarPainter oldDelegate) {
     return oldDelegate.angle != angle || oldDelegate.peerCount != peerCount;
   }
 }

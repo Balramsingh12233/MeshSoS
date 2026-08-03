@@ -5,9 +5,51 @@ import '../../../chat/presentation/screens/chat_screen.dart';
 import '../../../chat/presentation/screens/chats_list_screen.dart';
 import '../../../mesh/domain/models/message_envelope.dart';
 import '../../../mesh/domain/providers/mesh_router_provider.dart';
+import '../widgets/nearby_peer_item.dart';
 import '../widgets/radar_visualizer_card.dart';
 import '../widgets/recent_chat_item.dart';
 import '../widgets/sos_panic_card.dart';
+
+/// Representation of recent demo conversation item
+class ConversationSummary {
+  final String peerName;
+  final String lastMessage;
+  final DeliveryStatus deliveryStatus;
+  final Color avatarColor;
+  final String initials;
+
+  const ConversationSummary({
+    required this.peerName,
+    required this.lastMessage,
+    required this.deliveryStatus,
+    required this.avatarColor,
+    required this.initials,
+  });
+}
+
+const List<ConversationSummary> recentConversations = [
+  ConversationSummary(
+    peerName: 'John',
+    lastMessage: "Hello, that's your message?",
+    deliveryStatus: DeliveryStatus.sentMesh,
+    avatarColor: Color(0xFF0D3B66),
+    initials: 'JN',
+  ),
+  ConversationSummary(
+    peerName: 'Mesh Hinsez',
+    lastMessage: 'Hello, mreth.',
+    deliveryStatus: DeliveryStatus.sentCloud,
+    avatarColor: Color(0xFF311B92),
+    initials: 'MH',
+  ),
+  ConversationSummary(
+    peerName: 'Dirok Huvinro',
+    lastMessage: 'Messages that automatically use SMS as backup.',
+    deliveryStatus: DeliveryStatus.sentSms,
+    avatarColor: Color(0xFF4E342E),
+    initials: 'DH',
+  ),
+];
 
 /// DashboardScreen is the primary Home Screen of MeshSOS.
 class DashboardScreen extends ConsumerStatefulWidget {
@@ -71,6 +113,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
+    // Watch real-time discovered nearby peers
+    final nearbyPeersAsync = ref.watch(nearbyPeersProvider);
+    final nearbyPeers = nearbyPeersAsync.value ?? [];
+    final hasNearbyPeers = nearbyPeers.isNotEmpty;
+
     return Scaffold(
       backgroundColor: AppColors.background,
       appBar: AppBar(
@@ -118,16 +165,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
               ],
             ),
-            child: const Row(
+            child: Row(
               children: [
                 CircleAvatar(
                   radius: 4,
-                  backgroundColor: AppColors.transportMesh,
+                  backgroundColor: hasNearbyPeers ? AppColors.transportMesh : Colors.amber,
                 ),
-                SizedBox(width: 6),
+                const SizedBox(width: 6),
                 Text(
-                  'Mesh Online',
-                  style: TextStyle(
+                  hasNearbyPeers ? 'Mesh (${nearbyPeers.length})' : 'Mesh Online',
+                  style: const TextStyle(
                     color: AppColors.transportMesh,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
@@ -142,62 +189,78 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // ── FIXED SECTION: Radar + SOS Panic card (does NOT scroll) ────────
-          const RadarVisualizerCard(activePeerCount: 4),
+          // Real peer count controls glowing dots on radar (0 when no peers found)
+          RadarVisualizerCard(activePeerCount: nearbyPeers.length),
           SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
           const SizedBox(height: 12),
 
-          // Recent Conversations header (also fixed)
-          const Padding(
-            padding: EdgeInsets.symmetric(horizontal: 20, vertical: 4),
-            child: Text(
-              'Recent Conversations',
-              style: TextStyle(
-                color: AppColors.textSecondary,
-                fontSize: 14,
-                fontWeight: FontWeight.w600,
-              ),
+          // Dynamic Header: 'Discovered Devices' when nearby peers found, else 'Recent Conversations'
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  hasNearbyPeers ? 'Discovered Devices (${nearbyPeers.length})' : 'Recent Conversations',
+                  style: const TextStyle(
+                    color: AppColors.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                if (hasNearbyPeers)
+                  const Text(
+                    'Active Now',
+                    style: TextStyle(
+                      color: AppColors.transportMesh,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+              ],
             ),
           ),
 
-          // ── SCROLLABLE SECTION: only the chat list scrolls ──────────────────
+          // ── SCROLLABLE SECTION: shows nearby devices or recent chats ────────
           Expanded(
-            child: ListView(
-              physics: const BouncingScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 16),
-              children: [
-                RecentChatItem(
-                  peerName: 'John',
-                  lastMessageText: "Hello, that's your message?",
-                  mode: DeliveryStatus.sentMesh,
-                  onTap: () => _navigateToChatScreen(
-                    'John',
-                    avatarColor: const Color(0xFF0D3B66),
-                    initials: 'JN',
+            child: hasNearbyPeers
+                ? ListView.builder(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: nearbyPeers.length,
+                    itemBuilder: (context, index) {
+                      final peer = nearbyPeers[index];
+                      return NearbyPeerItem(
+                        peer: peer,
+                        onTap: () => _navigateToChatScreen(
+                          peer.displayName,
+                          avatarColor: const Color(0xFF0D3B66),
+                          initials: peer.displayName.isNotEmpty
+                              ? peer.displayName.substring(0, 1).toUpperCase()
+                              : '?',
+                        ),
+                      );
+                    },
+                  )
+                : ListView(
+                    physics: const BouncingScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    children: recentConversations
+                        .map(
+                          (c) => RecentChatItem(
+                            peerName: c.peerName,
+                            lastMessageText: c.lastMessage,
+                            mode: c.deliveryStatus,
+                            onTap: () => _navigateToChatScreen(
+                              c.peerName,
+                              avatarColor: c.avatarColor,
+                              initials: c.initials,
+                            ),
+                          ),
+                        )
+                        .toList(),
                   ),
-                ),
-                RecentChatItem(
-                  peerName: 'Mesh Hinsez',
-                  lastMessageText: 'Hello, mreth.',
-                  mode: DeliveryStatus.sentCloud,
-                  onTap: () => _navigateToChatScreen(
-                    'Mesh Hinsez',
-                    avatarColor: const Color(0xFF311B92),
-                    initials: 'MH',
-                  ),
-                ),
-                RecentChatItem(
-                  peerName: 'Dirok Huvinro',
-                  lastMessageText: 'Messages that automatically use SMS as backup.',
-                  mode: DeliveryStatus.sentSms,
-                  onTap: () => _navigateToChatScreen(
-                    'Dirok Huvinro',
-                    avatarColor: const Color(0xFF4E342E),
-                    initials: 'DH',
-                  ),
-                ),
-              ],
-            ),
           ),
         ],
       ),
