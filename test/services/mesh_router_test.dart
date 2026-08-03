@@ -72,12 +72,18 @@ void main() {
     });
 
     test('2. Controlled Flooding Forwarding Target Calculation', () async {
-      final forwardedPackets = <String, MessageEnvelope>{};
+      // Track what envelopes were forwarded and which peer was excluded
+      MessageEnvelope? forwardedEnvelope;
+      String? excludedPeerId;
 
-      router.connectedPeerIds = ['peer_sender', 'peer_relay_1', 'peer_relay_2'];
-      router.onSendToPeer = (targetPeerId, env) async {
-        forwardedPackets[targetPeerId] = env;
-      };
+      router = MeshRouter(
+        repository: repository,
+        currentDeviceId: 'my_phone_id',
+        onForwardEnvelope: (env, excludeId) async {
+          forwardedEnvelope = env;
+          excludedPeerId = excludeId;
+        },
+      );
 
       final envelope = MessageEnvelope(
         senderId: 'origin_user',
@@ -91,13 +97,12 @@ void main() {
         fromPeerId: 'peer_sender',
       );
 
-      // Verify packet was forwarded to relay_1 and relay_2, BUT NOT sent back to peer_sender
-      expect(forwardedPackets.containsKey('peer_sender'), isFalse);
-      expect(forwardedPackets.containsKey('peer_relay_1'), isTrue);
-      expect(forwardedPackets.containsKey('peer_relay_2'), isTrue);
+      // Verify the fromPeerId was correctly passed as excludePeerId to transport
+      expect(excludedPeerId, equals('peer_sender'));
 
-      // Verify forwarded packet has decremented TTL (5 -> 4)
-      expect(forwardedPackets['peer_relay_1']!.ttl, equals(4));
+      // Verify forwarded packet has decremented TTL (5 → 4)
+      expect(forwardedEnvelope, isNotNull);
+      expect(forwardedEnvelope!.ttl, equals(4));
     });
 
     test('3. Duplicate Packet Dropping (Idempotency)', () async {

@@ -25,16 +25,18 @@ class MeshRouter {
   /// Stream controller emitting incoming messages to UI screens
   final _incomingMessageController = StreamController<MessageEnvelope>.broadcast();
 
-  /// Callback function provided by transport layer to send raw JSON bytes to a peer device
-  Future<void> Function(String targetPeerId, MessageEnvelope envelope)? onSendToPeer;
-
-  /// List of currently connected radio peer device IDs
-  List<String> connectedPeerIds = [];
+  /// Callback provided by the transport layer (NearbyService) to forward
+  /// a packet to all connected peers except [excludePeerId].
+  /// WHY: MeshRouter stays transport-agnostic — it decides WHO to forward to
+  /// based on TTL/routing logic, but DELEGATES the actual radio send to
+  /// NearbyService via this callback.
+  final Future<void> Function(MessageEnvelope envelope, String? excludePeerId)?
+      onForwardEnvelope;
 
   MeshRouter({
     required this.repository,
     required this.currentDeviceId,
-    this.onSendToPeer,
+    this.onForwardEnvelope,
   });
 
   /// Exposes incoming messages stream for UI state listeners
@@ -73,19 +75,13 @@ class MeshRouter {
     // -----------------------------------------------------------------------
     // STEP 4: MULTI-HOP FORWARDING LOGIC (Controlled Flooding)
     // -----------------------------------------------------------------------
-    // Decrement TTL (Time-To-Live). If TTL > 0, copyForForwarding() returns new packet.
-    // If TTL <= 1, copyForForwarding() returns null (hop budget exhausted).
+    // Decrement TTL. If TTL > 0, copyForForwarding() returns new packet.
+    // If TTL <= 1, returns null (hop budget exhausted — prevents loops).
     final MessageEnvelope? outgoingEnvelope = envelope.copyForForwarding();
 
-    if (outgoingEnvelope != null) {
-      for (final peerId in connectedPeerIds) {
-        // CRITICAL RULE: Never forward packet back to the peer who just sent it to us!
-        if (peerId != fromPeerId) {
-          if (onSendToPeer != null) {
-            await onSendToPeer!(peerId, outgoingEnvelope);
-          }
-        }
-      }
+    if (outgoingEnvelope != null && onForwardEnvelope != null) {
+      // Delegate broadcast to NearbyService, excluding the original sender
+      await onForwardEnvelope!(outgoingEnvelope, fromPeerId);
     }
   }
 
@@ -94,14 +90,12 @@ class MeshRouter {
     // 1. Save to local DB & mark seen
     await repository.saveEnvelope(envelope);
 
-    // 2. Emit to local UI
+    // 2. Emit to local UI immediately
     _incomingMessageController.add(envelope);
 
-    // 3. Broadcast to all directly connected mesh peers
-    if (onSendToPeer != null) {
-      for (final peerId in connectedPeerIds) {
-        await onSendToPeer!(peerId, envelope);
-      }
+    // 3. Broadcast to all connected peers via NearbyService
+    if (onForwardEnvelope != null) {
+      await onForwardEnvelope!(envelope, null); // null = broadcast to everyone
     }
   }
 
