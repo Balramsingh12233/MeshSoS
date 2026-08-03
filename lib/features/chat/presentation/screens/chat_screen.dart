@@ -32,7 +32,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.onMaterialChildFirstBuild(context, () {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
       _loadHistory();
       _subscribeToRouterStream();
     });
@@ -40,17 +40,22 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
   /// Loads offline chat history from Hive DB on startup
   void _loadHistory() {
-    final repository = ref.read(localStorageRepositoryProvider);
-    final history = repository.getAllMessages();
-    
-    // If database is empty, seed demo messages matching the UI design mockup
-    if (history.isEmpty) {
+    try {
+      final repository = ref.read(localStorageRepositoryProvider);
+      final history = repository.getAllMessages();
+      
+      // If database is empty, seed demo messages matching the UI design mockup
+      if (history.isEmpty) {
+        _seedDemoMockupMessages();
+      } else {
+        setState(() {
+          _messages.clear();
+          _messages.addAll(history);
+        });
+      }
+    } catch (_) {
+      // Fallback to demo mockup messages if database box is not yet initialized
       _seedDemoMockupMessages();
-    } else {
-      setState(() {
-        _messages.clear();
-        _messages.addAll(history);
-      });
     }
   }
 
