@@ -19,8 +19,6 @@ abstract class AppTheme {
       colorScheme: const ColorScheme.dark(
         primary: AppColors.sosAccent,
         surface: AppColors.surface,
-        background: AppColors.background,
-        onBackground: AppColors.textPrimary,
         onSurface: AppColors.textPrimary,
       ),
 
