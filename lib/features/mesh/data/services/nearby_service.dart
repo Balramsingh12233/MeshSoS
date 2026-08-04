@@ -280,6 +280,33 @@ class NearbyService {
     }
   }
 
+  // ── Simulation / Demo Helpers ──────────────────────────────────────────────
+
+  /// Add a simulated peer for testing & demo on single devices or emulators.
+  void addSimulatedPeer({String? id, String? displayName}) {
+    final peerId = id ?? 'sim_${DateTime.now().millisecondsSinceEpoch % 10000}';
+    final name = displayName ?? 'Peer Node #${_discoveredPeers.length + 1}';
+    final peer = Peer(
+      id: peerId,
+      displayName: name,
+      isOnline: true,
+      hopDistance: 1,
+      lastConnectedAt: DateTime.now(),
+    );
+    _discoveredPeers[peerId] = peer;
+    _connectedPeers[peerId] = peer;
+    _peersController.add(discoveredPeers);
+    debugPrint('[NearbyService] 🧪 Added simulated peer: $name ($peerId)');
+  }
+
+  /// Remove all simulated peers.
+  void clearSimulatedPeers() {
+    _discoveredPeers.removeWhere((key, value) => key.startsWith('sim_'));
+    _connectedPeers.removeWhere((key, value) => key.startsWith('sim_'));
+    _peersController.add(discoveredPeers);
+    debugPrint('[NearbyService] 🧪 Cleared simulated peers');
+  }
+
   // ── Send ──────────────────────────────────────────────────────────────────
 
   /// Send a MessageEnvelope as JSON bytes to a specific connected peer.
