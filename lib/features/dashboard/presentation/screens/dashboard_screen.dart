@@ -155,37 +155,59 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-            decoration: BoxDecoration(
-              color: AppColors.transportMesh.withOpacity(0.18),
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: AppColors.transportMesh, width: 1.2),
-              boxShadow: [
-                BoxShadow(
-                  color: AppColors.transportMesh.withOpacity(0.3),
-                  blurRadius: 8,
-                  spreadRadius: 1,
-                ),
-              ],
-            ),
-            child: Row(
-              children: [
-                CircleAvatar(
-                  radius: 4,
-                  backgroundColor: hasNearbyPeers ? AppColors.transportMesh : Colors.amber,
-                ),
-                const SizedBox(width: 6),
-                Text(
-                  hasNearbyPeers ? 'Mesh (${nearbyPeers.length})' : 'Mesh Online',
-                  style: const TextStyle(
-                    color: AppColors.transportMesh,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
+          GestureDetector(
+            onTap: () {
+              final nearbyService = ref.read(nearbyServiceProvider);
+              if (hasNearbyPeers) {
+                nearbyService.clearSimulatedPeers();
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('Cleared simulated peers'),
+                    duration: Duration(seconds: 1),
                   ),
-                ),
-              ],
+                );
+              } else {
+                nearbyService.addSimulatedPeer(displayName: 'Nearby Node Alpha');
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(
+                    content: Text('📡 Simulated peer node discovered!'),
+                    duration: Duration(seconds: 1),
+                  ),
+                );
+              }
+            },
+            child: Container(
+              margin: const EdgeInsets.only(right: 16),
+              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+              decoration: BoxDecoration(
+                color: AppColors.transportMesh.withOpacity(0.18),
+                borderRadius: BorderRadius.circular(20),
+                border: Border.all(color: AppColors.transportMesh, width: 1.2),
+                boxShadow: [
+                  BoxShadow(
+                    color: AppColors.transportMesh.withOpacity(0.3),
+                    blurRadius: 8,
+                    spreadRadius: 1,
+                  ),
+                ],
+              ),
+              child: Row(
+                children: [
+                  CircleAvatar(
+                    radius: 4,
+                    backgroundColor: hasNearbyPeers ? AppColors.transportMesh : Colors.amber,
+                  ),
+                  const SizedBox(width: 6),
+                  Text(
+                    hasNearbyPeers ? 'Mesh (${nearbyPeers.length})' : 'Mesh Online',
+                    style: const TextStyle(
+                      color: AppColors.transportMesh,
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ],
@@ -195,7 +217,19 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         children: [
           // ── FIXED SECTION: Radar + Status Banner + SOS Panic card ──────────
           // Real peer count controls glowing dots on radar (0 when no peers found)
-          RadarVisualizerCard(activePeerCount: nearbyPeers.length),
+          GestureDetector(
+            onLongPress: () {
+              final nearbyService = ref.read(nearbyServiceProvider);
+              nearbyService.addSimulatedPeer();
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('📡 Simulated nearby device added to mesh radar!'),
+                  duration: Duration(seconds: 1),
+                ),
+              );
+            },
+            child: RadarVisualizerCard(activePeerCount: nearbyPeers.length),
+          ),
           // Shows actionable error card when permissions/GPS/mesh fails
           const MeshStatusBanner(),
           SosPanicCard(onTriggerSos: _handleSosBroadcast),
