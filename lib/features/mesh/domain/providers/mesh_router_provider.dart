@@ -104,26 +104,41 @@ final meshStatusProvider = StreamProvider<MeshStatus>((ref) {
 
 /// FutureProvider that bootstraps the full mesh on first read.
 ///
-/// Flow: requestAllPermissions() → isLocationServiceEnabled() → startMesh()
+/// Flow:
+///   1. requestAllPermissions()    — BLE + Location + NEARBY_WIFI_DEVICES
+///   2. isBluetoothEnabled()       — BT hardware must be ON
+///   3. isLocationServiceEnabled() — GPS must be ON for Nearby discovery
+///   4. startMesh()                — advertise + discover simultaneously
 final meshBootstrapProvider = FutureProvider<bool>((ref) async {
   final permService = ref.watch(permissionServiceProvider);
   final nearbyService = ref.watch(nearbyServiceProvider);
 
-  // Step 1: Request all runtime permissions (BLE + Location)
+  // Step 1: Request ALL runtime permissions in a batch
+  // CRITICAL: nearbyWifiDevices MUST be granted on API 33+ or startDiscovery()
+  // throws PlatformException(Failure, 8032: MISSING_PERMISSION_NEARBY_WIFI_DEVICES)
   final granted = await permService.requestAllPermissions();
   if (!granted) {
     nearbyService.markPermissionDenied();
     return false;
   }
 
-  // Step 2: Check GPS is on (Nearby requires location service enabled)
+  // Step 2: Check Bluetooth hardware service is ON
+  // Nearby fails (8032 or immediate disconnect) when BT is disabled
+  final btOn = await permService.isBluetoothEnabled();
+  if (!btOn) {
+    nearbyService.markPermissionDenied(); // reuse error state — BT off = unusable
+    return false;
+  }
+
+  // Step 3: Check GPS/Location service is ON
+  // Nearby requires location services even when not deriving location from BT
   final locationOn = await permService.isLocationServiceEnabled();
   if (!locationOn) {
     nearbyService.markLocationDisabled();
     return false;
   }
 
-  // Step 3: Start advertising + discovery simultaneously
+  // Step 4: Start advertising + discovery simultaneously
   await nearbyService.startMesh();
 
   return true;
