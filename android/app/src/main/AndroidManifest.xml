@@ -13,13 +13,10 @@
     <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH" />
     <uses-permission android:maxSdkVersion="30" android:name="android.permission.BLUETOOTH_ADMIN" />
 
-    <!-- Location — required for Nearby discovery on all API levels -->
-    <!-- API ≤ 28: Coarse location is sufficient -->
+    <!-- Location — required for Nearby discovery on all API levels (API 21+) -->
     <uses-permission android:maxSdkVersion="28" android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <!-- API 29-31: Fine location required -->
-    <uses-permission android:minSdkVersion="29" android:maxSdkVersion="31" android:name="android.permission.ACCESS_FINE_LOCATION" />
-    <!-- API 32+: Fine location still needed for background and Nearby scan -->
-    <uses-permission android:minSdkVersion="32" android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- Single fine-location declaration — works across all API levels; no SDK guards needed -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
 
     <!-- Android 12+ (API 31+) Bluetooth runtime permissions -->
     <uses-permission android:minSdkVersion="31" android:name="android.permission.BLUETOOTH_ADVERTISE" />
