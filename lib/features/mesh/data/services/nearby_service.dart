@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:nearby_connections/nearby_connections.dart';
 import '../../domain/models/message_envelope.dart';
 import '../../domain/models/peer_model.dart';
@@ -18,6 +19,13 @@ enum MeshStatus {
 /// Architecture (per official nearby_connections 4.3.0 docs):
 ///   Strategy: P2P_CLUSTER (many-to-many mesh — best for emergency networks)
 ///   ServiceId: 'com.example.mesh_sos' (unique app identifier)
+///
+/// CRITICAL NOTES from testing:
+///   1. GPS/Location Service MUST be ON — Nearby disconnects if GPS is off.
+///   2. Both advertise AND discover must run on every device simultaneously.
+///   3. serviceId MUST match exactly between devices.
+///   4. userName passed to startAdvertising/startDiscovery appears as the
+///      device "name" seen by the other device.
 class NearbyService {
   static const String _serviceId = 'com.example.mesh_sos';
   final Strategy _strategy = Strategy.P2P_CLUSTER;
@@ -57,6 +65,7 @@ class NearbyService {
     _status = newStatus;
     _lastErrorMessage = errorMessage;
     _statusController.add(_status);
+    debugPrint('[NearbyService] Status → $newStatus ${errorMessage != null ? "($errorMessage)" : ""}');
   }
 
   /// Called by meshBootstrapProvider when runtime permissions are denied.
@@ -72,35 +81,46 @@ class NearbyService {
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
   /// Start advertising and discovering simultaneously.
+  ///
+  /// BOTH must run on EVERY device — one device cannot be only advertiser
+  /// and the other only discoverer for P2P_CLUSTER to form a mesh.
   Future<void> startMesh() async {
     _setStatus(MeshStatus.initializing);
 
-    // Stop any stale sessions first for a clean state
+    // Stop any stale sessions first for a clean restart
     try {
       await Nearby().stopAdvertising();
       await Nearby().stopDiscovery();
+      await Nearby().stopAllEndpoints();
+      // Small delay to let the native layer fully reset
+      await Future.delayed(const Duration(milliseconds: 500));
     } catch (_) {}
 
     _isRunning = true;
+    _lastErrorMessage = null;
+
+    debugPrint('[NearbyService] Starting mesh as deviceId="$deviceId", serviceId="$_serviceId"');
 
     final advSuccess = await _startAdvertising();
     final discSuccess = await _startDiscovery();
 
+    debugPrint('[NearbyService] startMesh result: adv=$advSuccess disc=$discSuccess');
+
     if (advSuccess && discSuccess) {
       _setStatus(MeshStatus.active);
-    } else if (!advSuccess || !discSuccess) {
-      if (_lastErrorMessage != null) {
-        _setStatus(MeshStatus.error, errorMessage: _lastErrorMessage);
-      } else {
-        _setStatus(MeshStatus.active); // Partial active
-      }
+    } else {
+      final errMsg = _lastErrorMessage ?? 'Failed to start advertising or discovery';
+      _setStatus(MeshStatus.error, errorMessage: errMsg);
     }
   }
 
-  /// Force restart advertising and discovery (e.g. after permission granted)
+  /// Force restart advertising and discovery (e.g. after permission granted or retry).
   Future<void> restartMesh() async {
     _isRunning = false;
-    await stopAll();
+    _discoveredPeers.clear();
+    _connectedPeers.clear();
+    _endpointNames.clear();
+    _peersController.add([]);
     await startMesh();
   }
 
@@ -114,13 +134,11 @@ class NearbyService {
         onDisconnected: _onDisconnected,
         serviceId: _serviceId,
       );
-      // ignore: avoid_print
-      print('[NearbyService] ✅ Advertising started as "$deviceId"');
+      debugPrint('[NearbyService] ✅ Advertising started as "$deviceId"');
       return true;
     } catch (e) {
       _lastErrorMessage = 'Advertising error: ${e.toString()}';
-      // ignore: avoid_print
-      print('[NearbyService] ❌ startAdvertising error: $e');
+      debugPrint('[NearbyService] ❌ startAdvertising error: $e');
       return false;
     }
   }
@@ -134,13 +152,11 @@ class NearbyService {
         onEndpointLost: _onEndpointLost,
         serviceId: _serviceId,
       );
-      // ignore: avoid_print
-      print('[NearbyService] ✅ Discovery started as "$deviceId"');
+      debugPrint('[NearbyService] ✅ Discovery started as "$deviceId"');
       return true;
     } catch (e) {
       _lastErrorMessage = 'Discovery error: ${e.toString()}';
-      // ignore: avoid_print
-      print('[NearbyService] ❌ startDiscovery error: $e');
+      debugPrint('[NearbyService] ❌ startDiscovery error: $e');
       return false;
     }
   }
@@ -157,16 +173,19 @@ class NearbyService {
       await Nearby().stopDiscovery();
       await Nearby().stopAllEndpoints();
     } catch (_) {}
+    debugPrint('[NearbyService] stopAll complete');
   }
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
-  /// Called when a remote device initiates OR responds to a connection.
+  /// Called when a remote device initiates OR responds to a connection request.
+  ///
+  /// We always auto-accept — this is a P2P mesh, not a paired network.
   void _onConnectionInitiated(String endpointId, ConnectionInfo info) {
     _endpointNames[endpointId] = info.endpointName;
-    // ignore: avoid_print
-    print('[NearbyService] Connection initiated with $endpointId (${info.endpointName})');
+    debugPrint('[NearbyService] 🔗 Connection initiated: endpointId=$endpointId name="${info.endpointName}"');
 
+    // Auto-accept all incoming connections
     Nearby().acceptConnection(
       endpointId,
       onPayLoadRecieved: _onPayloadReceived,
@@ -174,9 +193,10 @@ class NearbyService {
     );
   }
 
-  /// Called after connection accepted/rejected.
+  /// Called after connection authentication completes (accepted/rejected).
   void _onConnectionResult(String endpointId, Status status) {
     final name = _endpointNames[endpointId] ?? endpointId;
+    debugPrint('[NearbyService] 🔗 Connection result: $endpointId → $status');
     if (status == Status.CONNECTED) {
       final peer = Peer(
         id: endpointId,
@@ -188,30 +208,30 @@ class NearbyService {
       _connectedPeers[endpointId] = peer;
       _discoveredPeers[endpointId] = peer;
       _peersController.add(discoveredPeers);
-      // ignore: avoid_print
-      print('[NearbyService] ✅ Connected to $endpointId ($name)');
+      debugPrint('[NearbyService] ✅ Connected to $endpointId ($name). Total peers: ${_connectedPeers.length}');
     } else {
-      // ignore: avoid_print
-      print('[NearbyService] Connection rejected/failed for $endpointId: $status');
+      debugPrint('[NearbyService] ⚠️ Connection rejected/failed for $endpointId: $status');
     }
   }
 
-  /// Called when a peer disconnects.
+  /// Called when a connected peer disconnects.
   void _onDisconnected(String endpointId) {
     _connectedPeers.remove(endpointId);
     _discoveredPeers.remove(endpointId);
     _peersController.add(discoveredPeers);
-    // ignore: avoid_print
-    print('[NearbyService] Disconnected from $endpointId');
+    debugPrint('[NearbyService] 🔌 Disconnected from $endpointId. Remaining peers: ${_connectedPeers.length}');
   }
 
-  /// Called when Discovery finds an advertising device.
+  /// Called when Discovery finds an advertising device nearby.
+  ///
+  /// IMPORTANT: We immediately requestConnection() so both sides can exchange
+  /// data. In P2P_CLUSTER, ANY device can initiate a connection to ANY other.
   void _onEndpointFound(
       String endpointId, String endpointName, String serviceId) {
     _endpointNames[endpointId] = endpointName;
-    // ignore: avoid_print
-    print('[NearbyService] 📡 Endpoint found: $endpointId ($endpointName)');
+    debugPrint('[NearbyService] 📡 Endpoint FOUND: $endpointId ($endpointName) serviceId=$serviceId');
 
+    // Add to discovered peers immediately so UI shows it even before connection
     final peer = Peer(
       id: endpointId,
       displayName: endpointName,
@@ -222,26 +242,27 @@ class NearbyService {
     _discoveredPeers[endpointId] = peer;
     _peersController.add(discoveredPeers);
 
-    try {
-      Nearby().requestConnection(
-        deviceId,
-        endpointId,
-        onConnectionInitiated: _onConnectionInitiated,
-        onConnectionResult: _onConnectionResult,
-        onDisconnected: _onDisconnected,
-      );
-    } catch (e) {
-      // ignore: avoid_print
-      print('[NearbyService] requestConnection error: $e');
-    }
+    // Request connection — if already connected or pending, Nearby will reject
+    // gracefully and that's fine (both sides might call this simultaneously)
+    Nearby().requestConnection(
+      deviceId,
+      endpointId,
+      onConnectionInitiated: _onConnectionInitiated,
+      onConnectionResult: _onConnectionResult,
+      onDisconnected: _onDisconnected,
+    ).catchError((e) {
+      debugPrint('[NearbyService] requestConnection error (may be duplicate): $e');
+    });
   }
 
   /// Called when a previously found endpoint is no longer visible.
   void _onEndpointLost(String? endpointId) {
     if (endpointId != null) {
+      final wasConnected = _connectedPeers.containsKey(endpointId);
       _connectedPeers.remove(endpointId);
       _discoveredPeers.remove(endpointId);
       _peersController.add(discoveredPeers);
+      debugPrint('[NearbyService] 📡 Endpoint LOST: $endpointId (wasConnected=$wasConnected)');
     }
   }
 
@@ -252,9 +273,9 @@ class NearbyService {
         final json = utf8.decode(payload.bytes!);
         final envelope = MessageEnvelope.fromJson(jsonDecode(json));
         _incomingEnvelopeController.add(envelope);
+        debugPrint('[NearbyService] 📨 Payload received from $endpointId: ${payload.bytes!.length} bytes');
       } catch (e) {
-        // ignore: avoid_print
-        print('[NearbyService] Payload decode error: $e');
+        debugPrint('[NearbyService] Payload decode error: $e');
       }
     }
   }
@@ -266,19 +287,21 @@ class NearbyService {
     try {
       final bytes = utf8.encode(jsonEncode(envelope.toJson()));
       await Nearby().sendBytesPayload(endpointId, bytes);
+      debugPrint('[NearbyService] 📤 Sent ${bytes.length} bytes to $endpointId');
     } catch (e) {
-      // ignore: avoid_print
-      print('[NearbyService] sendBytesPayload error to $endpointId: $e');
+      debugPrint('[NearbyService] sendBytesPayload error to $endpointId: $e');
     }
   }
 
   /// Broadcast an envelope to ALL currently connected peers.
   Future<void> broadcastEnvelope(MessageEnvelope envelope,
       {String? excludePeerId}) async {
-    for (final peerId in _connectedPeers.keys) {
-      if (peerId != excludePeerId) {
-        await sendEnvelope(peerId, envelope);
-      }
+    final targets = _connectedPeers.keys
+        .where((id) => id != excludePeerId)
+        .toList();
+    debugPrint('[NearbyService] 📢 Broadcasting to ${targets.length} peers');
+    for (final peerId in targets) {
+      await sendEnvelope(peerId, envelope);
     }
   }
 
