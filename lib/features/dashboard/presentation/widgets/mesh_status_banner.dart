@@ -137,7 +137,7 @@ class _BannerCard extends StatelessWidget {
         return (
           Icons.wifi_off_rounded,
           'Mesh Error',
-          msg.length > 60 ? '${msg.substring(0, 60)}…' : msg,
+          msg,
           'Retry',
           () => ref.invalidate(meshBootstrapProvider),
         );
