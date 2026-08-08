@@ -1,62 +1,44 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- ======================================================================
-         NEARBY CONNECTIONS PERMISSIONS (Android 5 to Android 15+ / API 21 - 36+)
-         ======================================================================
-         NOTE: Do NOT use maxSdkVersion attribute on any permission. Google Nearby
-         Connections SDK internally checks checkCallingOrSelfPermission() for
-         ACCESS_WIFI_STATE, CHANGE_WIFI_STATE, BLUETOOTH, and BLUETOOTH_ADMIN.
-         If maxSdkVersion is specified, Android OS revokes them on newer APIs,
-         causing Nearby SDK to fail with error 8032: MISSING_PERMISSION_ACCESS_WIFI_STATE.
-         ====================================================================== -->
+    <!--
+      FIX: The two BLUETOOTH_SCAN and NEARBY_WIFI_DEVICES lines below
+      previously had android:usesPermissionFlags="neverForLocation".
+      That flag tells Android "don't derive location from this scan" -
+      but the Nearby Connections SDK's discovery mechanism internally
+      relies on location-tied scan results even when your app never reads
+      GPS coordinates directly. With the flag present, the OS silently
+      strips location context from scan results and Nearby's discovery
+      callback (onEndpointFound) simply never fires - no error, no crash,
+      just an empty result forever. This was very likely why real devices
+      were never found. Flags removed below.
+    -->
 
-    <!-- WiFi permissions (required by Nearby Connections SDK on ALL API levels) -->
-    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
-    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE"/>
+    <uses-permission android:name="android.permission.CHANGE_WIFI_STATE"/>
 
-    <!-- Legacy Bluetooth permissions (required by Nearby Connections SDK on ALL API levels) -->
-    <uses-permission android:name="android.permission.BLUETOOTH" />
-    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <uses-permission android:name="android.permission.BLUETOOTH"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN"/>
 
-    <!-- Location permissions (required for Nearby discovery) -->
-    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
-    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION"/>
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION"/>
 
-    <!-- Android 12+ (API 31+) Bluetooth runtime permissions -->
-    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE" />
-    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
-    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"
-        android:usesPermissionFlags="neverForLocation" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADVERTISE"/>
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT"/>
+    <!-- FIXED: removed usesPermissionFlags="neverForLocation" -->
+    <uses-permission android:name="android.permission.BLUETOOTH_SCAN"/>
 
-    <!-- Android 13+ (API 33+) Nearby WiFi Devices permission -->
-    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"
-        android:usesPermissionFlags="neverForLocation" />
+    <!-- FIXED: removed usesPermissionFlags="neverForLocation" -->
+    <uses-permission android:name="android.permission.NEARBY_WIFI_DEVICES"/>
 
-    <application
-        android:label="mesh_sos"
-        android:name="${applicationName}"
-        android:icon="@mipmap/ic_launcher">
-        <activity
-            android:name=".MainActivity"
-            android:exported="true"
-            android:launchMode="singleTop"
-            android:taskAffinity=""
-            android:theme="@style/LaunchTheme"
-            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode"
-            android:hardwareAccelerated="true"
-            android:windowSoftInputMode="adjustResize">
-            <meta-data
-              android:name="io.flutter.embedding.android.NormalTheme"
-              android:resource="@style/NormalTheme"
-              />
+    <application android:label="mesh_sos" android:name="${applicationName}" android:icon="@mipmap/ic_launcher">
+        <activity android:name=".MainActivity" android:exported="true" android:launchMode="singleTop" android:taskAffinity="" android:theme="@style/LaunchTheme" android:configChanges="orientation|keyboardHidden|keyboard|screenSize|smallestScreenSize|locale|layoutDirection|fontScale|screenLayout|density|uiMode" android:hardwareAccelerated="true" android:windowSoftInputMode="adjustResize">
+            <meta-data android:name="io.flutter.embedding.android.NormalTheme" android:resource="@style/NormalTheme"/>
             <intent-filter>
                 <action android:name="android.intent.action.MAIN"/>
                 <category android:name="android.intent.category.LAUNCHER"/>
             </intent-filter>
         </activity>
-        <meta-data
-            android:name="flutterEmbedding"
-            android:value="2" />
+        <meta-data android:name="flutterEmbedding" android:value="2"/>
     </application>
     <queries>
         <intent>
