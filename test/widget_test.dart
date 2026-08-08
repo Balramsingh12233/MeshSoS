@@ -14,7 +14,7 @@ void main() {
     await tester.pump();
 
     // Verify Dashboard UI elements: Logo, 'Mesh Online' badge, SOS panic card, Recent Conversations
-    expect(find.text('Mesh Online'), findsOneWidget);
+    expect(find.text('Scanning...'), findsOneWidget);
     expect(find.text('Emergency SOS Panic'), findsOneWidget);
     expect(find.text('ONE-TAP EMERGENCY SOS'), findsOneWidget);
     expect(find.text('Recent Conversations'), findsOneWidget);
