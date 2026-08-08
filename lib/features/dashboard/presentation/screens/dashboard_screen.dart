@@ -53,6 +53,14 @@ const List<ConversationSummary> recentConversations = [
 ];
 
 /// DashboardScreen is the primary Home Screen of MeshSOS.
+///
+/// FIX (see debugging notes): the top-right status badge and the radar
+/// card's long-press previously called `nearbyService.addSimulatedPeer()`,
+/// which injected a FAKE peer into the list — this is why real devices
+/// never showed up: the UI was displaying fabricated data, not actual
+/// Nearby Connections discovery results. Both triggers are removed below.
+/// The badge and radar now ONLY ever reflect `nearbyPeersProvider`, which
+/// streams straight from NearbyService's real discoveredPeersStream.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -64,10 +72,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedBottomNavIndex = 0;
 
   void _navigateToChatScreen(
-    String peerName, {
-    Color avatarColor = const Color(0xFF0D3B66),
-    String? initials,
-  }) {
+      String peerName, {
+        Color avatarColor = const Color(0xFF0D3B66),
+        String? initials,
+      }) {
     Navigator.of(context).push(
       MaterialPageRoute(
         builder: (_) => ChatScreen(
@@ -107,10 +115,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     // Trigger mesh bootstrap (permissions + advertising/discovery) once.
-    // meshBootstrapProvider is a FutureProvider that starts mesh on first read.
     ref.watch(meshBootstrapProvider);
 
-    // If user selected 'Chats' tab (index 2), render ChatsListScreen!
     if (_selectedBottomNavIndex == 2) {
       return Scaffold(
         body: const ChatsListScreen(),
@@ -118,7 +124,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    // Watch real-time discovered nearby peers
+    // Real-time discovered nearby peers - straight from NearbyService,
+    // no simulation involved anywhere in this file anymore.
     final nearbyPeersAsync = ref.watch(nearbyPeersProvider);
     final nearbyPeers = nearbyPeersAsync.value ?? [];
     final hasNearbyPeers = nearbyPeers.isNotEmpty;
@@ -155,59 +162,42 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
-          GestureDetector(
-            onTap: () {
-              final nearbyService = ref.read(nearbyServiceProvider);
-              if (hasNearbyPeers) {
-                nearbyService.clearSimulatedPeers();
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('Cleared simulated peers'),
-                    duration: Duration(seconds: 1),
+          // Status badge - READ ONLY now. No onTap, no fake-peer injection.
+          // It reflects nearbyPeersProvider's real emitted list, nothing else.
+          Container(
+            margin: const EdgeInsets.only(right: 16),
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
+            decoration: BoxDecoration(
+              color: AppColors.transportMesh.withOpacity(0.18),
+              borderRadius: BorderRadius.circular(20),
+              border: Border.all(color: AppColors.transportMesh, width: 1.2),
+              boxShadow: [
+                BoxShadow(
+                  color: AppColors.transportMesh.withOpacity(0.3),
+                  blurRadius: 8,
+                  spreadRadius: 1,
+                ),
+              ],
+            ),
+            child: Row(
+              children: [
+                CircleAvatar(
+                  radius: 4,
+                  backgroundColor:
+                  hasNearbyPeers ? AppColors.transportMesh : Colors.amber,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  hasNearbyPeers
+                      ? 'Mesh (${nearbyPeers.length})'
+                      : 'Scanning...',
+                  style: const TextStyle(
+                    color: AppColors.transportMesh,
+                    fontSize: 12,
+                    fontWeight: FontWeight.bold,
                   ),
-                );
-              } else {
-                nearbyService.addSimulatedPeer(displayName: 'Nearby Node Alpha');
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(
-                    content: Text('📡 Simulated peer node discovered!'),
-                    duration: Duration(seconds: 1),
-                  ),
-                );
-              }
-            },
-            child: Container(
-              margin: const EdgeInsets.only(right: 16),
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
-              decoration: BoxDecoration(
-                color: AppColors.transportMesh.withOpacity(0.18),
-                borderRadius: BorderRadius.circular(20),
-                border: Border.all(color: AppColors.transportMesh, width: 1.2),
-                boxShadow: [
-                  BoxShadow(
-                    color: AppColors.transportMesh.withOpacity(0.3),
-                    blurRadius: 8,
-                    spreadRadius: 1,
-                  ),
-                ],
-              ),
-              child: Row(
-                children: [
-                  CircleAvatar(
-                    radius: 4,
-                    backgroundColor: hasNearbyPeers ? AppColors.transportMesh : Colors.amber,
-                  ),
-                  const SizedBox(width: 6),
-                  Text(
-                    hasNearbyPeers ? 'Mesh (${nearbyPeers.length})' : 'Mesh Online',
-                    style: const TextStyle(
-                      color: AppColors.transportMesh,
-                      fontSize: 12,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ],
@@ -215,35 +205,26 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // ── FIXED SECTION: Radar + Status Banner + SOS Panic card ──────────
-          // Real peer count controls glowing dots on radar (0 when no peers found)
-          GestureDetector(
-            onLongPress: () {
-              final nearbyService = ref.read(nearbyServiceProvider);
-              nearbyService.addSimulatedPeer();
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(
-                  content: Text('📡 Simulated nearby device added to mesh radar!'),
-                  duration: Duration(seconds: 1),
-                ),
-              );
-            },
-            child: RadarVisualizerCard(activePeerCount: nearbyPeers.length),
-          ),
-          // Shows actionable error card when permissions/GPS/mesh fails
+          // Radar card - no onLongPress anymore, purely a visual reflection
+          // of nearbyPeers.length. See radar_visualizer_card.dart note below
+          // about the rotating animation being cosmetic (runs regardless of
+          // peer count) - that part is fine to keep, it's not the bug.
+          RadarVisualizerCard(activePeerCount: nearbyPeers.length),
+
           const MeshStatusBanner(),
           SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
           const SizedBox(height: 12),
 
-          // Dynamic Header: 'Discovered Devices' when nearby peers found, else 'Recent Conversations'
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
             child: Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Text(
-                  hasNearbyPeers ? 'Discovered Devices (${nearbyPeers.length})' : 'Recent Conversations',
+                  hasNearbyPeers
+                      ? 'Discovered Devices (${nearbyPeers.length})'
+                      : 'Recent Conversations',
                   style: const TextStyle(
                     color: AppColors.textSecondary,
                     fontSize: 14,
@@ -263,45 +244,44 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
             ),
           ),
 
-          // ── SCROLLABLE SECTION: shows nearby devices or recent chats ────────
           Expanded(
             child: hasNearbyPeers
                 ? ListView.builder(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 16),
-                    itemCount: nearbyPeers.length,
-                    itemBuilder: (context, index) {
-                      final peer = nearbyPeers[index];
-                      return NearbyPeerItem(
-                        peer: peer,
-                        onTap: () => _navigateToChatScreen(
-                          peer.displayName,
-                          avatarColor: const Color(0xFF0D3B66),
-                          initials: peer.displayName.isNotEmpty
-                              ? peer.displayName.substring(0, 1).toUpperCase()
-                              : '?',
-                        ),
-                      );
-                    },
-                  )
-                : ListView(
-                    physics: const BouncingScrollPhysics(),
-                    padding: const EdgeInsets.only(bottom: 16),
-                    children: recentConversations
-                        .map(
-                          (c) => RecentChatItem(
-                            peerName: c.peerName,
-                            lastMessageText: c.lastMessage,
-                            mode: c.deliveryStatus,
-                            onTap: () => _navigateToChatScreen(
-                              c.peerName,
-                              avatarColor: c.avatarColor,
-                              initials: c.initials,
-                            ),
-                          ),
-                        )
-                        .toList(),
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 16),
+              itemCount: nearbyPeers.length,
+              itemBuilder: (context, index) {
+                final peer = nearbyPeers[index];
+                return NearbyPeerItem(
+                  peer: peer,
+                  onTap: () => _navigateToChatScreen(
+                    peer.displayName,
+                    avatarColor: const Color(0xFF0D3B66),
+                    initials: peer.displayName.isNotEmpty
+                        ? peer.displayName.substring(0, 1).toUpperCase()
+                        : '?',
                   ),
+                );
+              },
+            )
+                : ListView(
+              physics: const BouncingScrollPhysics(),
+              padding: const EdgeInsets.only(bottom: 16),
+              children: recentConversations
+                  .map(
+                    (c) => RecentChatItem(
+                  peerName: c.peerName,
+                  lastMessageText: c.lastMessage,
+                  mode: c.deliveryStatus,
+                  onTap: () => _navigateToChatScreen(
+                    c.peerName,
+                    avatarColor: c.avatarColor,
+                    initials: c.initials,
+                  ),
+                ),
+              )
+                  .toList(),
+            ),
           ),
         ],
       ),
@@ -322,22 +302,10 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       unselectedItemColor: AppColors.textSecondary,
       type: BottomNavigationBarType.fixed,
       items: const [
-        BottomNavigationBarItem(
-          icon: Icon(Icons.grid_view_rounded),
-          label: 'Dashboard',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.radar_rounded),
-          label: 'Radar',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.chat_bubble_outline_rounded),
-          label: 'Chats',
-        ),
-        BottomNavigationBarItem(
-          icon: Icon(Icons.settings_outlined),
-          label: 'Settings',
-        ),
+        BottomNavigationBarItem(icon: Icon(Icons.grid_view_rounded), label: 'Dashboard'),
+        BottomNavigationBarItem(icon: Icon(Icons.radar_rounded), label: 'Radar'),
+        BottomNavigationBarItem(icon: Icon(Icons.chat_bubble_outline_rounded), label: 'Chats'),
+        BottomNavigationBarItem(icon: Icon(Icons.settings_outlined), label: 'Settings'),
       ],
     );
   }
