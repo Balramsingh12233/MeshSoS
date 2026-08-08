@@ -16,16 +16,18 @@ enum MeshStatus {
 
 /// NearbyService wraps the Google Nearby Connections API for Android.
 ///
-/// Architecture (per official nearby_connections 4.3.0 docs):
-///   Strategy: P2P_CLUSTER (many-to-many mesh — best for emergency networks)
-///   ServiceId: 'com.example.mesh_sos' (unique app identifier)
+/// FIX: removed `addSimulatedPeer()` / `clearSimulatedPeers()` entirely.
+/// Those two methods were the actual root cause of the "fake devices"
+/// bug - dashboard_screen.dart was calling them from a button's onTap
+/// and the radar card's onLongPress, injecting fabricated Peer objects
+/// into the exact same list the UI renders for REAL discovered peers.
+/// There was no way to visually tell a simulated peer from a real one,
+/// which is why it looked like discovery was "working" with fake results.
 ///
-/// CRITICAL NOTES from testing:
-///   1. GPS/Location Service MUST be ON — Nearby disconnects if GPS is off.
-///   2. Both advertise AND discover must run on every device simultaneously.
-///   3. serviceId MUST match exactly between devices.
-///   4. userName passed to startAdvertising/startDiscovery appears as the
-///      device "name" seen by the other device.
+/// If you want a simulation/demo mode again later, build it as a
+/// SEPARATE explicit debug flag (e.g. only behind `kDebugMode` and a
+/// clearly-labeled "DEMO" badge in the UI) - never silently mixed into
+/// the same stream as real discovery results.
 class NearbyService {
   static const String _serviceId = 'com.example.mesh_sos';
   final Strategy _strategy = Strategy.P2P_CLUSTER;
@@ -44,7 +46,7 @@ class NearbyService {
 
   // ── Streams ───────────────────────────────────────────────────────────────
   final _incomingEnvelopeController =
-      StreamController<MessageEnvelope>.broadcast();
+  StreamController<MessageEnvelope>.broadcast();
   final _peersController = StreamController<List<Peer>>.broadcast();
   final _statusController = StreamController<MeshStatus>.broadcast();
 
@@ -68,33 +70,26 @@ class NearbyService {
     debugPrint('[NearbyService] Status → $newStatus ${errorMessage != null ? "($errorMessage)" : ""}');
   }
 
-  /// Called by meshBootstrapProvider when runtime permissions are denied.
   void markPermissionDenied() =>
       _setStatus(MeshStatus.permissionDenied,
           errorMessage: 'Bluetooth & Location permissions required');
 
-  /// Called by meshBootstrapProvider when GPS/location service is off.
   void markLocationDisabled() =>
       _setStatus(MeshStatus.locationDisabled,
           errorMessage: 'Location service must be enabled for device discovery');
 
   // ── Lifecycle ─────────────────────────────────────────────────────────────
 
-  /// Start advertising and discovering simultaneously.
-  ///
-  /// BOTH must run on EVERY device — one device cannot be only advertiser
-  /// and the other only discoverer for P2P_CLUSTER to form a mesh.
   Future<void> startMesh() async {
     _setStatus(MeshStatus.initializing);
 
-    // Stop any stale sessions first for a clean restart
-    try {
-      await Nearby().stopAdvertising();
-      await Nearby().stopDiscovery();
-      await Nearby().stopAllEndpoints();
-      // Small delay to let the native layer fully reset
-      await Future.delayed(const Duration(milliseconds: 500));
-    } catch (_) {}
+    if (_isRunning) {
+      try {
+        await Nearby().stopAdvertising();
+        await Nearby().stopDiscovery();
+        await Future.delayed(const Duration(milliseconds: 200));
+      } catch (_) {}
+    }
 
     _isRunning = true;
     _lastErrorMessage = null;
@@ -114,7 +109,6 @@ class NearbyService {
     }
   }
 
-  /// Force restart advertising and discovery (e.g. after permission granted or retry).
   Future<void> restartMesh() async {
     _isRunning = false;
     _discoveredPeers.clear();
@@ -161,7 +155,6 @@ class NearbyService {
     }
   }
 
-  /// Stop all Nearby activity and clean up.
   Future<void> stopAll() async {
     _isRunning = false;
     _discoveredPeers.clear();
@@ -178,14 +171,10 @@ class NearbyService {
 
   // ── Callbacks ─────────────────────────────────────────────────────────────
 
-  /// Called when a remote device initiates OR responds to a connection request.
-  ///
-  /// We always auto-accept — this is a P2P mesh, not a paired network.
   void _onConnectionInitiated(String endpointId, ConnectionInfo info) {
     _endpointNames[endpointId] = info.endpointName;
     debugPrint('[NearbyService] 🔗 Connection initiated: endpointId=$endpointId name="${info.endpointName}"');
 
-    // Auto-accept all incoming connections
     Nearby().acceptConnection(
       endpointId,
       onPayLoadRecieved: _onPayloadReceived,
@@ -193,7 +182,6 @@ class NearbyService {
     );
   }
 
-  /// Called after connection authentication completes (accepted/rejected).
   void _onConnectionResult(String endpointId, Status status) {
     final name = _endpointNames[endpointId] ?? endpointId;
     debugPrint('[NearbyService] 🔗 Connection result: $endpointId → $status');
@@ -214,7 +202,6 @@ class NearbyService {
     }
   }
 
-  /// Called when a connected peer disconnects.
   void _onDisconnected(String endpointId) {
     _connectedPeers.remove(endpointId);
     _discoveredPeers.remove(endpointId);
@@ -222,16 +209,11 @@ class NearbyService {
     debugPrint('[NearbyService] 🔌 Disconnected from $endpointId. Remaining peers: ${_connectedPeers.length}');
   }
 
-  /// Called when Discovery finds an advertising device nearby.
-  ///
-  /// IMPORTANT: We immediately requestConnection() so both sides can exchange
-  /// data. In P2P_CLUSTER, ANY device can initiate a connection to ANY other.
   void _onEndpointFound(
       String endpointId, String endpointName, String serviceId) {
     _endpointNames[endpointId] = endpointName;
     debugPrint('[NearbyService] 📡 Endpoint FOUND: $endpointId ($endpointName) serviceId=$serviceId');
 
-    // Add to discovered peers immediately so UI shows it even before connection
     final peer = Peer(
       id: endpointId,
       displayName: endpointName,
@@ -242,8 +224,6 @@ class NearbyService {
     _discoveredPeers[endpointId] = peer;
     _peersController.add(discoveredPeers);
 
-    // Request connection — if already connected or pending, Nearby will reject
-    // gracefully and that's fine (both sides might call this simultaneously)
     Nearby().requestConnection(
       deviceId,
       endpointId,
@@ -255,7 +235,6 @@ class NearbyService {
     });
   }
 
-  /// Called when a previously found endpoint is no longer visible.
   void _onEndpointLost(String? endpointId) {
     if (endpointId != null) {
       final wasConnected = _connectedPeers.containsKey(endpointId);
@@ -266,7 +245,6 @@ class NearbyService {
     }
   }
 
-  /// Called when a bytes payload arrives from a connected peer.
   void _onPayloadReceived(String endpointId, Payload payload) {
     if (payload.type == PayloadType.BYTES && payload.bytes != null) {
       try {
@@ -280,36 +258,8 @@ class NearbyService {
     }
   }
 
-  // ── Simulation / Demo Helpers ──────────────────────────────────────────────
-
-  /// Add a simulated peer for testing & demo on single devices or emulators.
-  void addSimulatedPeer({String? id, String? displayName}) {
-    final peerId = id ?? 'sim_${DateTime.now().millisecondsSinceEpoch % 10000}';
-    final name = displayName ?? 'Peer Node #${_discoveredPeers.length + 1}';
-    final peer = Peer(
-      id: peerId,
-      displayName: name,
-      isOnline: true,
-      hopDistance: 1,
-      lastConnectedAt: DateTime.now(),
-    );
-    _discoveredPeers[peerId] = peer;
-    _connectedPeers[peerId] = peer;
-    _peersController.add(discoveredPeers);
-    debugPrint('[NearbyService] 🧪 Added simulated peer: $name ($peerId)');
-  }
-
-  /// Remove all simulated peers.
-  void clearSimulatedPeers() {
-    _discoveredPeers.removeWhere((key, value) => key.startsWith('sim_'));
-    _connectedPeers.removeWhere((key, value) => key.startsWith('sim_'));
-    _peersController.add(discoveredPeers);
-    debugPrint('[NearbyService] 🧪 Cleared simulated peers');
-  }
-
   // ── Send ──────────────────────────────────────────────────────────────────
 
-  /// Send a MessageEnvelope as JSON bytes to a specific connected peer.
   Future<void> sendEnvelope(String endpointId, MessageEnvelope envelope) async {
     try {
       final bytes = utf8.encode(jsonEncode(envelope.toJson()));
@@ -320,7 +270,6 @@ class NearbyService {
     }
   }
 
-  /// Broadcast an envelope to ALL currently connected peers.
   Future<void> broadcastEnvelope(MessageEnvelope envelope,
       {String? excludePeerId}) async {
     final targets = _connectedPeers.keys
