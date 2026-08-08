@@ -11,7 +11,6 @@ import '../widgets/radar_visualizer_card.dart';
 import '../widgets/recent_chat_item.dart';
 import '../widgets/sos_panic_card.dart';
 
-/// Representation of recent demo conversation item
 class ConversationSummary {
   final String peerName;
   final String lastMessage;
@@ -52,15 +51,6 @@ const List<ConversationSummary> recentConversations = [
   ),
 ];
 
-/// DashboardScreen is the primary Home Screen of MeshSOS.
-///
-/// FIX (see debugging notes): the top-right status badge and the radar
-/// card's long-press previously called `nearbyService.addSimulatedPeer()`,
-/// which injected a FAKE peer into the list — this is why real devices
-/// never showed up: the UI was displaying fabricated data, not actual
-/// Nearby Connections discovery results. Both triggers are removed below.
-/// The badge and radar now ONLY ever reflect `nearbyPeersProvider`, which
-/// streams straight from NearbyService's real discoveredPeersStream.
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
 
@@ -72,7 +62,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   int _selectedBottomNavIndex = 0;
 
   void _navigateToChatScreen(
-      String peerName, {
+      String peerName,
+      String peerDeviceId, {
         Color avatarColor = const Color(0xFF0D3B66),
         String? initials,
       }) {
@@ -80,6 +71,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       MaterialPageRoute(
         builder: (_) => ChatScreen(
           peerName: peerName,
+          peerDeviceId: peerDeviceId,
           avatarColor: avatarColor,
           initials: initials,
         ),
@@ -114,7 +106,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
 
   @override
   Widget build(BuildContext context) {
-    // Trigger mesh bootstrap (permissions + advertising/discovery) once.
     ref.watch(meshBootstrapProvider);
 
     if (_selectedBottomNavIndex == 2) {
@@ -124,8 +115,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       );
     }
 
-    // Real-time discovered nearby peers - straight from NearbyService,
-    // no simulation involved anywhere in this file anymore.
     final nearbyPeersAsync = ref.watch(nearbyPeersProvider);
     final nearbyPeers = nearbyPeersAsync.value ?? [];
     final hasNearbyPeers = nearbyPeers.isNotEmpty;
@@ -162,8 +151,24 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           ],
         ),
         actions: [
-          // Status badge - READ ONLY now. No onTap, no fake-peer injection.
-          // It reflects nearbyPeersProvider's real emitted list, nothing else.
+          // FIX: manual rescan button - lets the user force a retry
+          // instead of waiting for auto-reconnect. Calls the new
+          // NearbyService.manualRescan() method.
+          IconButton(
+            icon: const Icon(Icons.refresh_rounded, color: AppColors.transportMesh),
+            tooltip: 'Rescan for nearby devices',
+            onPressed: () async {
+              final nearbyService = ref.read(nearbyServiceProvider);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(
+                  content: Text('🔄 Rescanning for nearby devices...'),
+                  duration: Duration(seconds: 2),
+                ),
+              );
+              await nearbyService.manualRescan();
+            },
+          ),
+          // Read-only status badge - no fake-peer triggers (fixed previously)
           Container(
             margin: const EdgeInsets.only(right: 16),
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 6),
@@ -205,12 +210,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       body: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Radar card - no onLongPress anymore, purely a visual reflection
-          // of nearbyPeers.length. See radar_visualizer_card.dart note below
-          // about the rotating animation being cosmetic (runs regardless of
-          // peer count) - that part is fine to keep, it's not the bug.
           RadarVisualizerCard(activePeerCount: nearbyPeers.length),
-
           const MeshStatusBanner(),
           SosPanicCard(onTriggerSos: _handleSosBroadcast),
 
@@ -256,6 +256,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   peer: peer,
                   onTap: () => _navigateToChatScreen(
                     peer.displayName,
+                    peer.displayName,
                     avatarColor: const Color(0xFF0D3B66),
                     initials: peer.displayName.isNotEmpty
                         ? peer.displayName.substring(0, 1).toUpperCase()
@@ -275,6 +276,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                   mode: c.deliveryStatus,
                   onTap: () => _navigateToChatScreen(
                     c.peerName,
+                    'demo_${c.peerName}',
                     avatarColor: c.avatarColor,
                     initials: c.initials,
                   ),
